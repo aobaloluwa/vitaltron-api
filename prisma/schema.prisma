@@ -12,6 +12,12 @@ enum AuthProvider {
   GOOGLE
 }
 
+enum AuthActionType {
+  EMAIL_VERIFICATION
+  PASSWORD_RESET
+}
+
+
 model User {
   id              String         @id @default(uuid()) @db.Uuid
   email           String?        @unique @db.VarChar(320)
@@ -24,6 +30,8 @@ model User {
   updatedAt       DateTime       @updatedAt
 
   authIdentities  AuthIdentity[]
+  refreshSessions RefreshSession[]
+  authActionTokens AuthActionToken[]
 
   @@map("users")
 }
@@ -40,4 +48,41 @@ model AuthIdentity {
   @@unique([provider, providerUserId])
   @@index([userId])
   @@map("auth_identities")
+}
+
+
+model RefreshSession {
+  id                String    @id @default(uuid()) @db.Uuid
+  tokenHash         String    @unique @db.VarChar(64)
+  userId            String    @db.Uuid
+  expiresAt         DateTime
+  revokedAt         DateTime?
+  createdAt         DateTime  @default(now())
+  lastUsedAt        DateTime?
+
+  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("refresh_sessions")
+}
+
+
+model AuthActionToken {
+  id        String         @id @default(uuid()) @db.Uuid
+  tokenHash String         @unique @db.VarChar(64)
+  type      AuthActionType
+  userId    String         @db.Uuid
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime       @default(now())
+  attempts   Int       @default(0)
+  lastSentAt DateTime  @default(now())
+
+
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, type])
+  @@index([expiresAt])
+  @@map("auth_action_tokens")
 }
