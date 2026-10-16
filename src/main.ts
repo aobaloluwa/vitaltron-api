@@ -41,13 +41,24 @@ async function bootstrap() {
   );
 
   // Describe Vitaltron's API for Swagger.
-  const swaggerConfig = new DocumentBuilder()
-    .setTitle('Vitaltron API')
-    .setDescription(
-      'API documentation for Vitaltron, the Portable Intelligent Health Identity platform.',
-    )
-    .setVersion('1.0')
-    .build();
+  
+const swaggerConfig = new DocumentBuilder()
+  .setTitle('Vitaltron API')
+  .setDescription(
+    'API documentation for Vitaltron, the Portable Intelligent Health Identity platform.',
+  )
+  .setVersion('1.0')
+  .addBearerAuth(
+    {
+      type: 'http',
+      scheme: 'bearer',
+      bearerFormat: 'JWT',
+      description: 'Enter your Vitaltron access token',
+    },
+    'bearer',
+  )
+  .build();
+
 
   const swaggerDocument = SwaggerModule.createDocument(
     app,
