@@ -19,6 +19,9 @@ import { LoginDto } from './dto/login.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { VerifyEmailDto } from './dto/verify-email.dto';
 import { ResendVerificationDto } from './dto/resend-verification.dto';
+import { ForgotPasswordDto } from './dto/forgot-password.dto';
+import { ResetPasswordDto } from './dto/reset-password.dto';
+import { GoogleSignInDto } from './dto/google-sign-in.dto';
 import { JwtAuthGuard } from './guards/jwt-auth/jwt-auth.guard';
 
 interface AuthenticatedRequest extends Request {
@@ -48,10 +51,28 @@ export class AuthController {
     return this.authService.resendVerificationCode(dto.email);
   }
 
+  @Post('forgot-password')
+  @ApiOperation({ summary: 'Request a password reset code by email' })
+  forgotPassword(@Body() dto: ForgotPasswordDto) {
+    return this.authService.forgotPassword(dto.email);
+  }
+
+  @Post('reset-password')
+  @ApiOperation({ summary: 'Reset a password using the email code' })
+  resetPassword(@Body() dto: ResetPasswordDto) {
+    return this.authService.resetPassword(dto);
+  }
+
   @Post('login')
   @ApiOperation({ summary: 'Log in with email and password' })
   login(@Body() dto: LoginDto) {
     return this.authService.login(dto.email, dto.password);
+  }
+
+  @Post('google')
+  @ApiOperation({ summary: 'Sign in or register using Google' })
+  googleSignIn(@Body() dto: GoogleSignInDto) {
+    return this.authService.googleSignIn(dto);
   }
 
   @Post('refresh')
