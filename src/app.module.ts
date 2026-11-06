@@ -1,4 +1,3 @@
-
 import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule } from '@nestjs/config';
@@ -10,6 +9,13 @@ import { AppService } from './app.service';
 import { HealthController } from './health/health.controller';
 import { PrismaModule } from './prisma/prisma.module';
 import { AuthModule } from './auth/auth.module';
+import { AuditModule } from './audit/audit.module';
+import { UsersModule } from './users/users.module';
+import { HealthRecordsModule } from './health-records/health-records.module';
+import { DocumentIngestionModule } from './document-ingestion/document-ingestion.module';
+import { ClinicalBriefModule } from './clinical-brief/clinical-brief.module';
+import { ControlledSharingModule } from './controlled-sharing/controlled-sharing.module';
+import { InteroperabilityModule } from './interoperability/interoperability.module';
 
 @Module({
   imports: [
@@ -38,7 +44,14 @@ import { AuthModule } from './auth/auth.module';
       },
     ]),
     PrismaModule,
+    AuditModule,
     AuthModule,
+    UsersModule,
+    HealthRecordsModule,
+    DocumentIngestionModule,
+    ClinicalBriefModule,
+    ControlledSharingModule,
+    InteroperabilityModule,
   ],
 
   controllers: [AppController, HealthController],

@@ -1,4 +1,3 @@
-
 generator client {
   provider = "prisma-client"
   output   = "../generated/prisma"
@@ -17,6 +16,49 @@ enum AuthActionType {
   PASSWORD_RESET
 }
 
+enum UserRole {
+  PATIENT
+  CLINICIAN
+  ADMIN
+}
+
+enum RecordType {
+  DIAGNOSIS
+  MEDICATION
+  LAB_TEST
+  ALLERGY
+  PROCEDURE
+  VITAL_SIGN
+  CLINICAL_NOTE
+}
+
+enum VerificationStatus {
+  UNVERIFIED
+  PATIENT_CONFIRMED
+  CLINICIAN_VERIFIED
+}
+
+enum IngestionStatus {
+  PENDING
+  PROCESSING
+  PROCESSED
+  FAILED
+  REVIEW_REQUIRED
+}
+
+enum GrantStatus {
+  ACTIVE
+  EXPIRED
+  REVOKED
+}
+
+enum RelationshipType {
+  CHILD
+  PARENT
+  SPOUSE
+  DEPENDENT
+  OTHER
+}
 
 model User {
   id              String         @id @default(uuid()) @db.Uuid
@@ -24,14 +66,35 @@ model User {
   phoneNumber     String?        @unique @db.VarChar(20)
   passwordHash    String?        @db.VarChar(255)
   displayName     String?        @db.VarChar(100)
+  role            UserRole       @default(PATIENT)
+  isProfileComplete Boolean      @default(false)
   emailVerifiedAt DateTime?
   phoneVerifiedAt DateTime?
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
 
-  authIdentities  AuthIdentity[]
-  refreshSessions RefreshSession[]
-  authActionTokens AuthActionToken[]
+  authIdentities    AuthIdentity[]
+  refreshSessions   RefreshSession[]
+  authActionTokens  AuthActionToken[]
+
+  patientProfile    PatientProfile?
+  clinicianProfile  ClinicianProfile?
+
+  familyPrimary     FamilyRelationship[] @relation("PrimaryUser")
+  familyDependents  FamilyRelationship[] @relation("DependentUser")
+
+  healthRecords     HealthRecord[]       @relation("PatientHealthRecords")
+  createdRecords    HealthRecord[]       @relation("CreatedByRecords")
+
+  documents         MedicalDocument[]
+  clinicalBriefs    ClinicalBrief[]      @relation("PatientBriefs")
+  generatedBriefs   ClinicalBrief[]      @relation("GeneratedByBriefs")
+
+  createdAccessGrants AccessGrant[]      @relation("CreatedAccessGrants")
+  patientAccessGrants AccessGrant[]      @relation("PatientAccessGrants")
+
+  actorAuditLogs    AuditLog[]           @relation("ActorAuditLogs")
+  targetAuditLogs   AuditLog[]           @relation("TargetAuditLogs")
 
   @@map("users")
 }
@@ -50,39 +113,229 @@ model AuthIdentity {
   @@map("auth_identities")
 }
 
-
 model RefreshSession {
-  id                String    @id @default(uuid()) @db.Uuid
-  tokenHash         String    @unique @db.VarChar(64)
-  userId            String    @db.Uuid
-  expiresAt         DateTime
-  revokedAt         DateTime?
-  createdAt         DateTime  @default(now())
-  lastUsedAt        DateTime?
+  id         String    @id @default(uuid()) @db.Uuid
+  tokenHash  String    @unique @db.VarChar(64)
+  userId     String    @db.Uuid
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  createdAt  DateTime  @default(now())
+  lastUsedAt DateTime?
 
-  user              User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([expiresAt])
   @@map("refresh_sessions")
 }
 
-
 model AuthActionToken {
-  id        String         @id @default(uuid()) @db.Uuid
-  tokenHash String         @unique @db.VarChar(64)
-  type      AuthActionType
-  userId    String         @db.Uuid
-  expiresAt DateTime
-  usedAt    DateTime?
-  createdAt DateTime       @default(now())
-  attempts   Int       @default(0)
-  lastSentAt DateTime  @default(now())
+  id         String         @id @default(uuid()) @db.Uuid
+  tokenHash  String         @unique @db.VarChar(64)
+  type       AuthActionType
+  userId     String         @db.Uuid
+  expiresAt  DateTime
+  usedAt     DateTime?
+  createdAt  DateTime       @default(now())
+  attempts   Int            @default(0)
+  lastSentAt DateTime       @default(now())
 
-
-  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user       User           @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, type])
   @@index([expiresAt])
   @@map("auth_action_tokens")
+}
+
+model PatientProfile {
+  id                       String   @id @default(uuid()) @db.Uuid
+  userId                   String   @unique @db.Uuid
+  dateOfBirth              DateTime?
+  gender                   String?  @db.VarChar(50)
+  bloodType                String?  @db.VarChar(10)
+  emergencyContactName     String?  @db.VarChar(100)
+  emergencyContactPhone    String?  @db.VarChar(20)
+  allergiesSummary         String?  @db.Text
+  chronicConditionsSummary String?  @db.Text
+  primaryLanguage          String?  @db.VarChar(50)
+  createdAt                DateTime @default(now())
+  updatedAt                DateTime @updatedAt
+
+  user                     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("patient_profiles")
+}
+
+model ClinicianProfile {
+  id              String   @id @default(uuid()) @db.Uuid
+  userId          String   @unique @db.Uuid
+  licenseNumber   String   @db.VarChar(100)
+  specialization  String   @db.VarChar(100)
+  facilityName    String   @db.VarChar(150)
+  isVerified      Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("clinician_profiles")
+}
+
+model FamilyRelationship {
+  id               String           @id @default(uuid()) @db.Uuid
+  primaryUserId    String           @db.Uuid
+  dependentUserId  String           @db.Uuid
+  relationshipType RelationshipType @default(DEPENDENT)
+  createdAt        DateTime         @default(now())
+
+  primaryUser      User             @relation("PrimaryUser", fields: [primaryUserId], references: [id], onDelete: Cascade)
+  dependentUser    User             @relation("DependentUser", fields: [dependentUserId], references: [id], onDelete: Cascade)
+
+  @@unique([primaryUserId, dependentUserId])
+  @@map("family_relationships")
+}
+
+model HealthRecord {
+  id                 String             @id @default(uuid()) @db.Uuid
+  patientId          String             @db.Uuid
+  createdById        String             @db.Uuid
+  type               RecordType
+  title              String             @db.VarChar(200)
+  description        String?            @db.Text
+  eventDate          DateTime           @default(now())
+  severity           String?            @db.VarChar(50)
+  status             String?            @db.VarChar(50)
+  facilityName       String?            @db.VarChar(150)
+  verificationStatus VerificationStatus @default(UNVERIFIED)
+  fhirData           Json?
+  documentId         String?            @db.Uuid
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  patient            User               @relation("PatientHealthRecords", fields: [patientId], references: [id], onDelete: Cascade)
+  createdBy          User               @relation("CreatedByRecords", fields: [createdById], references: [id], onDelete: Cascade)
+  document           MedicalDocument?   @relation(fields: [documentId], references: [id], onDelete: SetNull)
+
+  extractedEntities  ExtractedEntity[]
+
+  @@index([patientId, eventDate])
+  @@index([type])
+  @@map("health_records")
+}
+
+model MedicalDocument {
+  id                String          @id @default(uuid()) @db.Uuid
+  userId            String          @db.Uuid
+  fileName          String          @db.VarChar(255)
+  fileUrl           String          @db.Text
+  fileType          String          @db.VarChar(100)
+  fileSize          Int
+  checksum          String?         @db.VarChar(64)
+  uploadSource      String          @default("USER_UPLOAD") @db.VarChar(50)
+  ingestionStatus   IngestionStatus @default(PENDING)
+  extractedText     String?         @db.Text
+  extractedMetaData Json?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  user              User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  healthRecords     HealthRecord[]
+  extractedEntities ExtractedEntity[]
+
+  @@index([userId])
+  @@map("medical_documents")
+}
+
+model ExtractedEntity {
+  id                String            @id @default(uuid()) @db.Uuid
+  documentId        String            @db.Uuid
+  recordType        RecordType
+  title             String            @db.VarChar(200)
+  description       String?           @db.Text
+  confidenceScore   Float             @default(0.0)
+  isConfirmed       Boolean           @default(false)
+  confirmedRecordId String?           @db.Uuid
+  createdAt         DateTime          @default(now())
+
+  document          MedicalDocument   @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  confirmedRecord   HealthRecord?     @relation(fields: [confirmedRecordId], references: [id], onDelete: SetNull)
+
+  @@index([documentId])
+  @@map("extracted_entities")
+}
+
+model ClinicalBrief {
+  id               String   @id @default(uuid()) @db.Uuid
+  patientId        String   @db.Uuid
+  generatedById    String   @db.Uuid
+  summaryText      String   @db.Text
+  activeMedications Json
+  severeAllergies  Json
+  recentLabs       Json
+  riskFlags        Json
+  briefPurpose     String   @default("CLINICAL_CONSULTATION") @db.VarChar(100)
+  generatedAt      DateTime @default(now())
+
+  patient          User     @relation("PatientBriefs", fields: [patientId], references: [id], onDelete: Cascade)
+  generatedBy      User     @relation("GeneratedByBriefs", fields: [generatedById], references: [id], onDelete: Cascade)
+
+  @@index([patientId, generatedAt])
+  @@map("clinical_briefs")
+}
+
+model AccessGrant {
+  id                 String            @id @default(uuid()) @db.Uuid
+  patientId          String            @db.Uuid
+  createdById        String            @db.Uuid
+  tokenHash          String            @unique @db.VarChar(64)
+  passcodeHash       String?           @db.VarChar(255)
+  expiresAt          DateTime
+  maxAccessCount     Int               @default(5)
+  accessCount        Int               @default(0)
+  allowedRecordTypes String[]          @default([])
+  recipientName      String?           @db.VarChar(150)
+  status             GrantStatus       @default(ACTIVE)
+  revokedAt          DateTime?
+  createdAt          DateTime          @default(now())
+
+  patient            User              @relation("PatientAccessGrants", fields: [patientId], references: [id], onDelete: Cascade)
+  createdBy          User              @relation("CreatedAccessGrants", fields: [createdById], references: [id], onDelete: Cascade)
+  accessLogs         GrantAccessLog[]
+
+  @@index([tokenHash])
+  @@index([patientId])
+  @@map("access_grants")
+}
+
+model GrantAccessLog {
+  id            String      @id @default(uuid()) @db.Uuid
+  accessGrantId String      @db.Uuid
+  accessedAt    DateTime    @default(now())
+  accessorIp    String?     @db.VarChar(45)
+  userAgent     String?     @db.Text
+  success       Boolean     @default(true)
+
+  accessGrant   AccessGrant @relation(fields: [accessGrantId], references: [id], onDelete: Cascade)
+
+  @@index([accessGrantId])
+  @@map("grant_access_logs")
+}
+
+model AuditLog {
+  id              String   @id @default(uuid()) @db.Uuid
+  action          String   @db.VarChar(100)
+  actorUserId     String?  @db.Uuid
+  targetPatientId String?  @db.Uuid
+  ipAddress       String?  @db.VarChar(45)
+  userAgent       String?  @db.Text
+  details         Json?
+  createdAt       DateTime @default(now())
+
+  actorUser       User?    @relation("ActorAuditLogs", fields: [actorUserId], references: [id], onDelete: SetNull)
+  targetPatient   User?    @relation("TargetAuditLogs", fields: [targetPatientId], references: [id], onDelete: SetNull)
+
+  @@index([actorUserId])
+  @@index([targetPatientId])
+  @@index([createdAt])
+  @@map("audit_logs")
 }

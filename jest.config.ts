@@ -2,8 +2,6 @@ import type { Config } from 'jest';
 import { pathsToModuleNameMapper } from 'ts-jest';
 import ts from 'typescript';
 
-// Path aliases (e.g. the ones added by `nest g library`) live in tsconfig.json,
-// so they are read from there instead of being duplicated here.
 const { config: tsconfig } = ts.readConfigFile(
   './tsconfig.json',
   ts.sys.readFile,
@@ -17,7 +15,15 @@ const config: Config = {
   transform: {
     '^.+\\.(t|j)s$': 'ts-jest',
   },
-  moduleNameMapper: pathsToModuleNameMapper(paths, { prefix: '<rootDir>/' }),
+  moduleNameMapper: {
+    '^(\\.\\./)+generated/prisma/enums$': '<rootDir>/generated/prisma/enums.ts',
+    '^(\\.\\./)+generated/prisma/enums\\.js$': '<rootDir>/generated/prisma/enums.ts',
+    '^\\.\\/internal\\/(.*)\\.js$': '<rootDir>/generated/prisma/internal/$1.ts',
+    '^\\.\\/enums\\.js$': '<rootDir>/generated/prisma/enums.ts',
+    '^\\.\\/models\\.js$': '<rootDir>/generated/prisma/models.ts',
+    '^\\.\\/commonInputTypes\\.js$': '<rootDir>/generated/prisma/commonInputTypes.ts',
+    ...pathsToModuleNameMapper(paths, { prefix: '<rootDir>/' }),
+  },
   collectCoverageFrom: [
     'src/**/*.(t|j)s',
     'libs/**/*.(t|j)s',
