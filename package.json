@@ -1,12 +1,13 @@
 {
   "name": "vitaltron-api",
   "version": "0.0.1",
-  "description": "",
+  "description": "Vitaltron API - Portable Intelligent Health Identity Platform",
   "author": "",
   "private": true,
   "license": "UNLICENSED",
   "scripts": {
-    "build": "nest build",
+    "postinstall": "prisma generate",
+    "build": "prisma generate && nest build",
     "deploy": "nest deploy",
     "format": "prettier --write \"src/**/*.ts\" \"test/**/*.ts\"",
     "start": "nest start",
