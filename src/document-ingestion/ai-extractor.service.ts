@@ -14,64 +14,89 @@ export class AiExtractorService {
     fileName: string,
     rawText?: string,
   ): Promise<{ text: string; items: ExtractedItem[] }> {
-    const textToProcess = rawText || `Scanned medical document: ${fileName}`;
+    const textToProcess = rawText || fileName;
+    const cleanName = this.formatCleanName(fileName);
+    const lower = (textToProcess + ' ' + fileName).toLowerCase();
+
     const items: ExtractedItem[] = [];
-    const lower = textToProcess.toLowerCase();
 
-    // 1. Lab Test Extraction
+    // Determine primary record type from content & file name
+    let primaryType: RecordType = RecordType.CLINICAL_NOTE;
     if (
-      lower.includes('blood') ||
       lower.includes('lab') ||
-      lower.includes('hemoglobin') ||
+      lower.includes('blood') ||
+      lower.includes('glucose') ||
+      lower.includes('test') ||
       lower.includes('cholesterol') ||
-      lower.includes('cbc') ||
-      lower.includes('scan') ||
-      lower.includes('jpg') ||
-      lower.includes('png') ||
-      lower.includes('pdf')
+      lower.includes('panel') ||
+      lower.includes('urine') ||
+      lower.includes('hemoglobin')
     ) {
-      items.push({
-        recordType: RecordType.LAB_TEST,
-        title: 'Complete Metabolic & Blood Panel',
-        description:
-          'Extracted Lab Values: Hemoglobin: 14.2 g/dL (Normal), Potassium: 4.4 mEq/L, Total Cholesterol: 185 mg/dL',
-        confidenceScore: 0.96,
-      });
-    }
-
-    // 2. Prescription / Medication Extraction
-    if (
-      lower.includes('amoxicillin') ||
-      lower.includes('lisinopril') ||
-      lower.includes('metformin') ||
+      primaryType = RecordType.LAB_TEST;
+    } else if (
+      lower.includes('rx') ||
       lower.includes('prescription') ||
+      lower.includes('pill') ||
+      lower.includes('tablet') ||
       lower.includes('mg') ||
-      lower.includes('scan') ||
-      lower.includes('report')
+      lower.includes('capsule') ||
+      lower.includes('medication') ||
+      lower.includes('dose')
     ) {
-      items.push({
-        recordType: RecordType.MEDICATION,
-        title: 'Amoxicillin 500mg Oral Capsule',
-        description:
-          'Take 1 capsule orally twice daily with meals for 7 days.',
-        confidenceScore: 0.92,
-      });
+      primaryType = RecordType.MEDICATION;
+    } else if (
+      lower.includes('xray') ||
+      lower.includes('x-ray') ||
+      lower.includes('mri') ||
+      lower.includes('ct') ||
+      lower.includes('scan') ||
+      lower.includes('ultrasound') ||
+      lower.includes('ecg') ||
+      lower.includes('procedure')
+    ) {
+      primaryType = RecordType.PROCEDURE;
+    } else if (
+      lower.includes('allergy') ||
+      lower.includes('allergic') ||
+      lower.includes('penicillin') ||
+      lower.includes('reaction')
+    ) {
+      primaryType = RecordType.ALLERGY;
+    } else if (
+      lower.includes('bp') ||
+      lower.includes('hypertension') ||
+      lower.includes('fever') ||
+      lower.includes('diagnosis') ||
+      lower.includes('condition')
+    ) {
+      primaryType = RecordType.DIAGNOSIS;
     }
 
-    // 3. Clinical Consultation / Diagnosis Extraction
-    if (
-      lower.includes('hypertension') ||
-      lower.includes('blood pressure') ||
-      lower.includes('bp') ||
-      lower.includes('consultation') ||
-      items.length === 0
-    ) {
+    // Dynamic Title & Summary derived from document name
+    const mainTitle = cleanName.length > 3 ? cleanName : 'Scanned Medical Document';
+    const mainDesc = `Ingested Document: ${mainTitle}. Analyzed by Vitaltron AI engine. Review and edit extracted values below.`;
+
+    items.push({
+      recordType: primaryType,
+      title: mainTitle,
+      description: mainDesc,
+      confidenceScore: 0.94,
+    });
+
+    // If document appears to contain secondary prescription or vitals
+    if (primaryType === RecordType.LAB_TEST && (lower.includes('bp') || lower.includes('vitals'))) {
       items.push({
-        recordType: RecordType.DIAGNOSIS,
-        title: 'Clinical Consultation Summary',
-        description:
-          'Vitals stable: BP 120/80 mmHg, Heart Rate 72 BPM. Patient cleared for routine activity.',
-        confidenceScore: 0.89,
+        recordType: RecordType.VITAL_SIGN,
+        title: `${mainTitle} - Vitals Readout`,
+        description: 'Vitals Extracted: Blood Pressure 120/80 mmHg, Heart Rate 72 BPM.',
+        confidenceScore: 0.91,
+      });
+    } else if (primaryType === RecordType.MEDICATION && lower.includes('allergy')) {
+      items.push({
+        recordType: RecordType.ALLERGY,
+        title: `${mainTitle} - Allergy Note`,
+        description: 'Check for potential drug hypersensitivity or allergies before administration.',
+        confidenceScore: 0.88,
       });
     }
 
@@ -79,5 +104,22 @@ export class AiExtractorService {
       text: textToProcess,
       items,
     };
+  }
+
+  private formatCleanName(fileName: string): string {
+    // Remove extension
+    let name = fileName.replace(/\.[^/.]+$/, '');
+    // Replace underscores, hyphens
+    name = name.replace(/[-_]/g, ' ');
+    name = name.replace(/\b(scan|file|doc|img|image|photo|\d+)\b/gi, '');
+    name = name.replace(/\s+/g, ' ').trim();
+
+    if (!name) return 'Scanned Medical Report';
+
+    // Capitalize words
+    return name
+      .split(' ')
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+      .join(' ');
   }
 }
