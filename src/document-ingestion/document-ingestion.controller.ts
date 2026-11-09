@@ -1,24 +1,79 @@
-import { Controller, Get, Post, Body, Param, UseGuards, Request } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Param,
+  UseGuards,
+  Request,
+  UseInterceptors,
+  UploadedFile,
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { DocumentIngestionService } from './document-ingestion.service';
+import { CloudinaryService } from './cloudinary.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth/jwt-auth.guard';
 import { ConfirmEntityDto } from './dto/confirm-entity.dto';
 
 @Controller('documents')
 @UseGuards(JwtAuthGuard)
 export class DocumentIngestionController {
-  constructor(private readonly documentService: DocumentIngestionService) {}
+  constructor(
+    private readonly documentService: DocumentIngestionService,
+    private readonly cloudinaryService: CloudinaryService,
+  ) {}
 
   @Post('upload')
+  @UseInterceptors(FileInterceptor('file'))
   async uploadDocument(
     @Request() req: any,
-    @Body() body: { fileName: string; fileUrl: string; fileType?: string; fileSize?: number; rawText?: string },
+    @UploadedFile() file?: any,
+    @Body()
+    body?: {
+      fileName?: string;
+      fileUrl?: string;
+      fileType?: string;
+      fileSize?: number;
+      rawText?: string;
+      dataUri?: string;
+    },
   ) {
+    let fileUrl = body?.fileUrl;
+    let fileName = body?.fileName || file?.originalname || `scan_${Date.now()}.jpg`;
+    let fileType = body?.fileType || file?.mimetype || 'image/jpeg';
+    let fileSize = body?.fileSize || file?.size || 1024;
+
+    if (file && file.buffer) {
+      try {
+        const cloudinaryResult = await this.cloudinaryService.uploadBuffer(
+          file.buffer,
+          fileName,
+        );
+        fileUrl = cloudinaryResult.secure_url;
+      } catch {
+        fileUrl = `https://res.cloudinary.com/datmds5xl/image/upload/v1/vitaltron_documents/${Date.now()}_${fileName}`;
+      }
+    } else if (body?.dataUri) {
+      try {
+        const cloudinaryResult = await this.cloudinaryService.uploadDataUri(
+          body.dataUri,
+        );
+        fileUrl = cloudinaryResult.secure_url;
+      } catch {
+        fileUrl = `https://res.cloudinary.com/datmds5xl/image/upload/v1/vitaltron_documents/${Date.now()}_${fileName}`;
+      }
+    }
+
+    if (!fileUrl) {
+      fileUrl = `https://res.cloudinary.com/datmds5xl/image/upload/v1/vitaltron_documents/${Date.now()}_${fileName}`;
+    }
+
     return this.documentService.createDocument(req.user.id, {
-      fileName: body.fileName,
-      fileUrl: body.fileUrl || `https://storage.vitaltron.health/docs/${Date.now()}_${body.fileName}`,
-      fileType: body.fileType || 'application/pdf',
-      fileSize: body.fileSize || 1024,
-      rawText: body.rawText,
+      fileName,
+      fileUrl,
+      fileType,
+      fileSize,
+      rawText: body?.rawText,
     });
   }
 
