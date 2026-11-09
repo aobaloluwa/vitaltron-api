@@ -75,9 +75,7 @@ export class MailService implements OnModuleInit {
     console.log(`🔑 Content:\n${options.text}`);
     console.log('==================================================\n');
 
-    let sent = false;
-
-    // Try Resend API if API Key is configured
+    // If Resend API Key is set, send via Resend API using onboarding@resend.dev
     if (this.resendApiKey) {
       try {
         const response = await fetch('https://api.resend.com/emails', {
@@ -87,7 +85,7 @@ export class MailService implements OnModuleInit {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            from: this.from.includes('<') ? this.from : `Vitaltron <${this.from}>`,
+            from: 'Vitaltron <onboarding@resend.dev>',
             to: [options.to],
             subject: options.subject,
             text: options.text,
@@ -96,19 +94,20 @@ export class MailService implements OnModuleInit {
         });
 
         if (response.ok) {
-          this.logger.log(`Email successfully sent via Resend API to ${options.to}`);
-          sent = true;
+          this.logger.log(`Email successfully delivered via Resend API to ${options.to}`);
+          return;
         } else {
           const errText = await response.text();
-          this.logger.warn(`Resend API returned error: ${errText}`);
+          this.logger.warn(`Resend API response error: ${errText}`);
         }
       } catch (err: any) {
-        this.logger.warn(`Resend API error: ${err.message}`);
+        this.logger.warn(`Resend API exception: ${err.message}`);
       }
+      return;
     }
 
-    // Fallback to SMTP if Resend wasn't used or failed
-    if (!sent && this.transporter) {
+    // If SMTP transporter exists and Resend isn't configured
+    if (this.transporter) {
       try {
         await this.transporter.sendMail({
           from: this.from,
@@ -118,17 +117,9 @@ export class MailService implements OnModuleInit {
           ...(options.html ? { html: options.html } : {}),
         });
         this.logger.log(`Email successfully sent via SMTP to ${options.to}`);
-        sent = true;
       } catch (err: any) {
-        this.logger.warn(`SMTP delivery error: ${err.message}`);
+        this.logger.warn(`SMTP delivery failed: ${err.message}`);
       }
-    }
-
-    // Always log code to console so developer can proceed seamlessly
-    if (!sent) {
-      this.logger.log(
-        `[LIVE LOG FALLBACK] Email verification code logged above for ${options.to}.`,
-      );
     }
   }
 }
