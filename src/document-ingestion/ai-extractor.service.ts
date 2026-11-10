@@ -152,7 +152,7 @@ export class AiExtractorService {
       if (foundLine || lowerFull.includes(spec.key) || lowerFull.includes('blood count') || lowerFull.includes('cbc') || lowerFull.includes('lab') || lowerFull.includes('report')) {
         const val = matchedVal || spec.defaultResult;
         const statusTag = spec.isLow ? 'Below Range' : 'In-Range';
-        const titleText = `${spec.title} ${spec.isLow ? '[Below Range]' : ''}`.trim();
+        const titleText = spec.title.trim();
         const descText = `Result: ${val} ${spec.unit} | Reference Range: ${spec.defaultRange} ${spec.unit} | Status: ${statusTag} | Patient: ${patientName} | Hospital: ${hospitalName} | Doctor: ${doctorName}`;
 
         items.push({
