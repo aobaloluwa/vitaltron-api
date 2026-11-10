@@ -61,7 +61,7 @@ export class ControlledSharingService {
 
     const baseUrl = process.env.FRONTEND_URL || 'http://localhost:8081';
     const shareableUrl = `${baseUrl}/share?token=${tokenRaw}`;
-    const qrCodeImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(shareableUrl)}`;
+    const qrCodeImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=350x350&color=5B-2A-86&bgcolor=ED-E7-F6&qzone=2&data=${encodeURIComponent(shareableUrl)}`;
 
     return {
       grantId: grant.id,
@@ -102,7 +102,7 @@ export class ControlledSharingService {
       }
 
       const shareableUrl = `${baseUrl}/share?token=${g.id}`;
-      const qrCodeImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(shareableUrl)}`;
+      const qrCodeImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=350x350&color=5B-2A-86&bgcolor=ED-E7-F6&qzone=2&data=${encodeURIComponent(shareableUrl)}`;
 
       return {
         ...g,
