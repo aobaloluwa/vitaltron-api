@@ -94,19 +94,25 @@ export class AiExtractorService {
     const items: ExtractedItem[] = [];
     const lowerFull = (ocrText + ' ' + fileName).toLowerCase();
 
-    // Patient & Hospital Header Info Detection
-    let hospitalName = 'GNU Solidario Hospital';
-    let patientName = 'Ana Betz';
-    let doctorName = 'Dr. Cameron Cordara';
+    // Patient & Hospital Header Info Detection (Dynamic extraction ONLY - NO hardcoded fallbacks)
+    let hospitalName: string | null = null;
+    let patientName: string | null = null;
+    let doctorName: string | null = null;
 
-    const hospitalMatch = ocrText.match(/(?:hospital|clinic|center|lab)\s*[:=\-]?\s*([a-z0-9\s]+)/i);
-    if (hospitalMatch) hospitalName = hospitalMatch[1].trim();
+    const hospitalMatch = ocrText.match(/(?:hospital|clinic|center|medical center|lab)\s*[:=\-]?\s*([a-z0-9\s]+)/i);
+    if (hospitalMatch && hospitalMatch[1].trim().length > 3) {
+      hospitalName = hospitalMatch[1].trim();
+    }
 
     const patientMatch = ocrText.match(/name\s*[:=\-]?\s*([a-z\s]+)/i);
-    if (patientMatch) patientName = patientMatch[1].trim();
+    if (patientMatch && patientMatch[1].trim().length > 2) {
+      patientName = patientMatch[1].trim();
+    }
 
     const doctorMatch = ocrText.match(/doctor\s*[:=\-]?\s*([a-z\s]+)/i);
-    if (doctorMatch) doctorName = `Dr. ${doctorMatch[1].trim()}`;
+    if (doctorMatch && doctorMatch[1].trim().length > 2) {
+      doctorName = `Dr. ${doctorMatch[1].trim()}`;
+    }
 
     // Complete Blood Count (CBC) Comprehensive 18-Test Panel
     const CBC_SPECS = [
@@ -153,12 +159,20 @@ export class AiExtractorService {
         const val = matchedVal || spec.defaultResult;
         const statusTag = spec.isLow ? 'Below Range' : 'In-Range';
         const titleText = spec.title.trim();
-        const descText = `Result: ${val} ${spec.unit} | Reference Range: ${spec.defaultRange} ${spec.unit} | Status: ${statusTag} | Patient: ${patientName} | Hospital: ${hospitalName} | Doctor: ${doctorName}`;
+
+        const descParts = [
+          `Result: ${val} ${spec.unit}`,
+          `Reference Range: ${spec.defaultRange} ${spec.unit}`,
+          `Status: ${statusTag}`,
+        ];
+        if (patientName) descParts.push(`Patient: ${patientName}`);
+        if (hospitalName) descParts.push(`Hospital: ${hospitalName}`);
+        if (doctorName) descParts.push(`Doctor: ${doctorName}`);
 
         items.push({
           recordType: RecordType.LAB_TEST,
           title: titleText,
-          description: descText,
+          description: descParts.join(' | '),
           confidenceScore: foundLine ? 0.98 : 0.93,
         });
       }
@@ -171,10 +185,13 @@ export class AiExtractorService {
     for (const line of lines) {
       const bpMatch = line.match(vitalBpRegex);
       if (bpMatch) {
+        const descParts = [`Result: ${bpMatch[1]} mmHg`, 'Status: Normal'];
+        if (hospitalName) descParts.push(`Hospital: ${hospitalName}`);
+
         items.push({
           recordType: RecordType.VITAL_SIGN,
           title: `Blood Pressure: ${bpMatch[1]} mmHg`,
-          description: `Result: ${bpMatch[1]} mmHg | Status: Normal | Hospital: ${hospitalName}`,
+          description: descParts.join(' | '),
           confidenceScore: 0.96,
         });
       }
@@ -183,10 +200,13 @@ export class AiExtractorService {
       if (medMatch) {
         const medName = this.capitalizeWords(medMatch[1]);
         const dosage = medMatch[2] ? medMatch[2] : '';
+        const descParts = [`Prescribed Dosage: "${line}"`];
+        if (doctorName) descParts.push(`Doctor: ${doctorName}`);
+
         items.push({
           recordType: RecordType.MEDICATION,
           title: `Prescription: ${medName} ${dosage}`.trim(),
-          description: `Prescribed Dosage: "${line}" | Doctor: ${doctorName}`,
+          description: descParts.join(' | '),
           confidenceScore: 0.94,
         });
       }
