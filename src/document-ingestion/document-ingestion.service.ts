@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AiExtractorService } from './ai-extractor.service';
 import { AuditService } from '../audit/audit.service';
@@ -7,6 +7,8 @@ import { IngestionStatus, VerificationStatus } from '../../generated/prisma/enum
 
 @Injectable()
 export class DocumentIngestionService {
+  private readonly logger = new Logger(DocumentIngestionService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly aiExtractor: AiExtractorService,
@@ -53,6 +55,7 @@ export class DocumentIngestionService {
         details: { documentId: doc.id, extractedItemsCount: items.length },
       });
     } catch (err) {
+      this.logger.error('Document entity extraction failed:', err);
       await this.prisma.medicalDocument.update({
         where: { id: doc.id },
         data: { ingestionStatus: IngestionStatus.FAILED },
