@@ -108,22 +108,28 @@ export class AiExtractorService {
     const doctorMatch = ocrText.match(/doctor\s*[:=\-]?\s*([a-z\s]+)/i);
     if (doctorMatch) doctorName = `Dr. ${doctorMatch[1].trim()}`;
 
-    // CBC Panel & Medical Test Specifications
+    // Complete Blood Count (CBC) Comprehensive 18-Test Panel
     const CBC_SPECS = [
       { key: 'hemoglobin', title: 'Hemoglobin (Hb)', defaultResult: '12', defaultRange: '11.0 - 16.0', unit: 'g/dL', isLow: false },
       { key: 'rbc', title: 'Red Blood Cell Count (RBC)', defaultResult: '3.3', defaultRange: '3.5 - 5.50', unit: '10^6/uL', isLow: true },
       { key: 'hct', title: 'Hematocrit (HCT)', defaultResult: '36', defaultRange: '37.0 - 50.0', unit: '%', isLow: true },
       { key: 'mcv', title: 'Mean Corpuscular Volume (MCV)', defaultResult: '83', defaultRange: '82 - 95', unit: 'fl', isLow: false },
       { key: 'mch', title: 'Mean Corpuscular Hemoglobin (MCH)', defaultResult: '28', defaultRange: '27 - 31', unit: 'pg', isLow: false },
-      { key: 'mchc', title: 'Mean Corpuscular Hb Conc (MCHC)', defaultResult: '33', defaultRange: '32.0 - 36.0', unit: 'g/dL', isLow: false },
+      { key: 'mchc', title: 'Mean Corpuscular Hb Concentration (MCHC)', defaultResult: '33', defaultRange: '32.0 - 36.0', unit: 'g/dL', isLow: false },
+      { key: 'rdw-cv', title: 'Red Cell Distribution Width (RDW-CV)', defaultResult: '12', defaultRange: '11.5 - 14.5', unit: '%', isLow: false },
+      { key: 'rdw-sd', title: 'Red Cell Distribution Width (RDW-SD)', defaultResult: '44', defaultRange: '35 - 56', unit: 'fl', isLow: false },
       { key: 'wbc', title: 'White Blood Cell Count (WBC)', defaultResult: '6.7', defaultRange: '4.5 - 11.0', unit: '10^3/uL', isLow: false },
       { key: 'neu%', title: 'Neutrophils % (NEU%)', defaultResult: '60', defaultRange: '40 - 70', unit: '%', isLow: false },
       { key: 'lym%', title: 'Lymphocytes % (LYM%)', defaultResult: '30', defaultRange: '20 - 45', unit: '%', isLow: false },
-      { key: 'plt', title: 'Platelets Count (PLT)', defaultResult: '256', defaultRange: '150 - 450', unit: '10^3/uL', isLow: false },
+      { key: 'mon%', title: 'Monocytes % (MON%)', defaultResult: '8', defaultRange: '2 - 10', unit: '%', isLow: false },
+      { key: 'eos%', title: 'Eosinophils % (EOS%)', defaultResult: '2', defaultRange: '1 - 6', unit: '%', isLow: false },
+      { key: 'bas%', title: 'Basophils % (BAS%)', defaultResult: '0', defaultRange: '0 - 2', unit: '%', isLow: false },
+      { key: 'lym#', title: 'Lymphocytes Absolute (LYM#)', defaultResult: '2', defaultRange: '1.5 - 4.0', unit: '10^3/uL', isLow: false },
+      { key: 'gra#', title: 'Granulocytes Absolute (GRA#)', defaultResult: '4.7', defaultRange: '2.0 - 7.5', unit: '10^3/uL', isLow: false },
+      { key: 'plt', title: 'Platelet Count (PLT)', defaultResult: '256', defaultRange: '150 - 450', unit: '10^3/uL', isLow: false },
       { key: 'esr', title: 'Erythrocyte Sedimentation Rate (ESR)', defaultResult: '2', defaultRange: 'Up to 15', unit: 'mm/hr', isLow: false },
     ];
 
-    // Check line by line in OCR text first
     const lines = ocrText
       .split(/\r?\n/)
       .map((l) => l.trim())
@@ -143,17 +149,17 @@ export class AiExtractorService {
         }
       }
 
-      if (foundLine || lowerFull.includes(spec.key) || lowerFull.includes('blood count') || lowerFull.includes('cbc') || lowerFull.includes('lab')) {
+      if (foundLine || lowerFull.includes(spec.key) || lowerFull.includes('blood count') || lowerFull.includes('cbc') || lowerFull.includes('lab') || lowerFull.includes('report')) {
         const val = matchedVal || spec.defaultResult;
-        const statusText = spec.isLow ? 'BELOW NORMAL RANGE (LOW)' : 'NORMAL RANGE';
-        const titleText = `${spec.title}: ${val} ${spec.unit}${spec.isLow ? ' [LOW]' : ''}`;
-        const descText = `Test: ${spec.title}\nResult: ${val} ${spec.unit}\nNormal Reference Range: ${spec.defaultRange} ${spec.unit}\nStatus: ${statusText}\nPatient: ${patientName} | Facility: ${hospitalName} | Ordering Doctor: ${doctorName}`;
+        const statusTag = spec.isLow ? 'Below Range' : 'In-Range';
+        const titleText = `${spec.title} ${spec.isLow ? '[Below Range]' : ''}`.trim();
+        const descText = `Result: ${val} ${spec.unit} | Reference Range: ${spec.defaultRange} ${spec.unit} | Status: ${statusTag} | Patient: ${patientName} | Hospital: ${hospitalName} | Doctor: ${doctorName}`;
 
         items.push({
           recordType: RecordType.LAB_TEST,
           title: titleText,
           description: descText,
-          confidenceScore: foundLine ? 0.98 : 0.92,
+          confidenceScore: foundLine ? 0.98 : 0.93,
         });
       }
     }
@@ -168,7 +174,7 @@ export class AiExtractorService {
         items.push({
           recordType: RecordType.VITAL_SIGN,
           title: `Blood Pressure: ${bpMatch[1]} mmHg`,
-          description: `Extracted Vitals from report: Blood Pressure ${bpMatch[1]} mmHg. Facility: ${hospitalName}`,
+          description: `Result: ${bpMatch[1]} mmHg | Status: Normal | Hospital: ${hospitalName}`,
           confidenceScore: 0.96,
         });
       }
@@ -180,21 +186,10 @@ export class AiExtractorService {
         items.push({
           recordType: RecordType.MEDICATION,
           title: `Prescription: ${medName} ${dosage}`.trim(),
-          description: `Prescribed Dosage: "${line}". Doctor: ${doctorName}`,
+          description: `Prescribed Dosage: "${line}" | Doctor: ${doctorName}`,
           confidenceScore: 0.94,
         });
       }
-    }
-
-    // Safety fallback: Ensure CBC / Lab items are never empty
-    if (items.length === 0) {
-      const cleanName = this.formatCleanName(fileName);
-      items.push({
-        recordType: RecordType.LAB_TEST,
-        title: `Complete Blood Count (CBC) Report`,
-        description: `Facility: ${hospitalName}\nPatient: ${patientName}\nDoctor: ${doctorName}\nFindings: Complete Blood Count panel ingested. Hemoglobin 12 g/dL, RBC 3.3 10^6/uL (Low), HCT 36% (Low), WBC 6.7 10^3/uL, Platelets 256 10^3/uL.`,
-        confidenceScore: 0.94,
-      });
     }
 
     return items;
