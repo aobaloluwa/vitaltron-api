@@ -24,7 +24,7 @@ export class DocumentIngestionController {
   ) {}
 
   @Post('upload')
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FileInterceptor('file', { limits: { fileSize: 50 * 1024 * 1024 } }))
   async uploadDocument(
     @Request() req: any,
     @UploadedFile() file?: any,
