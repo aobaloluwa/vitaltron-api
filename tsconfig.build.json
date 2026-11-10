@@ -3,6 +3,13 @@
   "compilerOptions": {
     "rootDir": "."
   },
-  "include": ["src"],
-  "exclude": ["node_modules", "test", "dist", "**/*spec.ts"]
+  "exclude": [
+    "node_modules",
+    "test",
+    "dist",
+    "jest.config.ts",
+    "prisma7.config.ts",
+    "vitaltron-api-client.ts",
+    "**/*spec.ts"
+  ]
 }

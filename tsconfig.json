@@ -14,10 +14,19 @@
     "types": ["node", "jest"],
     "sourceMap": true,
     "outDir": "./dist",
-    "rootDir": "src",
+    "rootDir": ".",
     "incremental": true,
     "skipLibCheck": true,
     "strict": true,
     "strictPropertyInitialization": false
-  }
+  },
+  "exclude": [
+    "node_modules",
+    "dist",
+    "test",
+    "jest.config.ts",
+    "prisma7.config.ts",
+    "vitaltron-api-client.ts",
+    "**/*.spec.ts"
+  ]
 }
