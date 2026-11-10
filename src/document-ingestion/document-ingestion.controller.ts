@@ -43,7 +43,11 @@ export class DocumentIngestionController {
     let fileType = body?.fileType || file?.mimetype || 'image/jpeg';
     let fileSize = body?.fileSize || file?.size || 1024;
 
+    let effectiveDataUri = body?.dataUri;
+
     if (file && file.buffer) {
+      const base64Str = file.buffer.toString('base64');
+      effectiveDataUri = `data:${fileType};base64,${base64Str}`;
       try {
         const cloudinaryResult = await this.cloudinaryService.uploadBuffer(
           file.buffer,
@@ -54,6 +58,7 @@ export class DocumentIngestionController {
         fileUrl = `https://res.cloudinary.com/datmds5xl/image/upload/v1/vitaltron_documents/${Date.now()}_${fileName}`;
       }
     } else if (body?.dataUri) {
+      effectiveDataUri = body.dataUri;
       try {
         const cloudinaryResult = await this.cloudinaryService.uploadDataUri(
           body.dataUri,
@@ -74,7 +79,7 @@ export class DocumentIngestionController {
       fileType,
       fileSize,
       rawText: body?.rawText,
-      dataUri: body?.dataUri,
+      dataUri: effectiveDataUri,
     });
   }
 
