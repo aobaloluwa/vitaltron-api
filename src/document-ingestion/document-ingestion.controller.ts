@@ -74,6 +74,7 @@ export class DocumentIngestionController {
       fileType,
       fileSize,
       rawText: body?.rawText,
+      dataUri: body?.dataUri,
     });
   }
 

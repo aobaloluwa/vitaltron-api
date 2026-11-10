@@ -15,7 +15,7 @@ export class DocumentIngestionService {
     private readonly auditService: AuditService,
   ) {}
 
-  async createDocument(userId: string, fileData: { fileName: string; fileUrl: string; fileType: string; fileSize: number; rawText?: string }) {
+  async createDocument(userId: string, fileData: { fileName: string; fileUrl: string; fileType: string; fileSize: number; rawText?: string; dataUri?: string }) {
     const doc = await this.prisma.medicalDocument.create({
       data: {
         userId,
@@ -29,7 +29,12 @@ export class DocumentIngestionService {
     });
 
     try {
-      const { text, items } = await this.aiExtractor.extractEntitiesFromText(fileData.fileName, fileData.rawText);
+      const { text, items } = await this.aiExtractor.extractEntitiesFromImageOrText({
+        fileName: fileData.fileName,
+        fileUrl: fileData.fileUrl,
+        dataUri: fileData.dataUri,
+        rawText: fileData.rawText,
+      });
 
       await this.prisma.medicalDocument.update({
         where: { id: doc.id },
