@@ -59,7 +59,8 @@ export class ControlledSharingService {
       details: { grantId: grant.id, expiresAt, maxAccessCount, recipientName: dto.recipientName },
     });
 
-    const qrPayload = `https://vitaltron.health/clinical-access/${tokenRaw}`;
+    const baseUrl = process.env.FRONTEND_URL || 'http://localhost:8081';
+    const qrPayload = `${baseUrl}/share?token=${tokenRaw}`;
 
     return {
       grantId: grant.id,
@@ -70,6 +71,7 @@ export class ControlledSharingService {
       maxAccessCount: grant.maxAccessCount,
       requiresPasscode: !!dto.passcode,
       recipientName: grant.recipientName,
+      allowedRecordTypes: grant.allowedRecordTypes,
     };
   }
 
