@@ -60,13 +60,15 @@ export class ControlledSharingService {
     });
 
     const baseUrl = process.env.FRONTEND_URL || 'http://localhost:8081';
-    const qrPayload = `${baseUrl}/share?token=${tokenRaw}`;
+    const shareableUrl = `${baseUrl}/share?token=${tokenRaw}`;
+    const qrCodeImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(shareableUrl)}`;
 
     return {
       grantId: grant.id,
       shareableToken: tokenRaw,
-      shareableUrl: qrPayload,
-      qrCodePayload: qrPayload,
+      shareableUrl,
+      qrCodeImageUrl,
+      qrCodePayload: shareableUrl,
       expiresAt: grant.expiresAt,
       maxAccessCount: grant.maxAccessCount,
       requiresPasscode: !!dto.passcode,
@@ -90,15 +92,23 @@ export class ControlledSharingService {
     });
 
     const now = new Date();
+    const baseUrl = process.env.FRONTEND_URL || 'http://localhost:8081';
+
     return grants.map((g) => {
       let isExpired = g.expiresAt < now || g.accessCount >= g.maxAccessCount;
       let effectiveStatus = g.status;
       if (g.status === GrantStatus.ACTIVE && isExpired) {
         effectiveStatus = GrantStatus.EXPIRED;
       }
+
+      const shareableUrl = `${baseUrl}/share?token=${g.id}`;
+      const qrCodeImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(shareableUrl)}`;
+
       return {
         ...g,
         status: effectiveStatus,
+        shareableUrl,
+        qrCodeImageUrl,
         tokenHash: undefined,
         passcodeHash: undefined,
       };
@@ -139,7 +149,8 @@ export class ControlledSharingService {
   async accessGrantByToken(tokenRaw: string, dto: AccessGrantRequestDto, ipAddress?: string, userAgent?: string) {
     const tokenHash = this.hashToken(tokenRaw);
 
-    const grant = await this.prisma.accessGrant.findUnique({
+    // Support finding by tokenHash or direct grant id
+    let grant = await this.prisma.accessGrant.findUnique({
       where: { tokenHash },
       include: {
         patient: {
@@ -147,6 +158,17 @@ export class ControlledSharingService {
         },
       },
     });
+
+    if (!grant) {
+      grant = await this.prisma.accessGrant.findUnique({
+        where: { id: tokenRaw },
+        include: {
+          patient: {
+            select: { id: true, displayName: true, email: true },
+          },
+        },
+      });
+    }
 
     if (!grant) {
       throw new NotFoundException('Invalid or expired clinical share link');
