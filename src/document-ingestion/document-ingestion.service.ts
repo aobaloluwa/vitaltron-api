@@ -117,13 +117,17 @@ export class DocumentIngestionService {
       throw new BadRequestException('Entity has already been confirmed and added to timeline');
     }
 
+    const desc = dto.description || entity.description || '';
+    const extractedFacility = desc.match(/(?:Hospital|Facility):\s*([^\n|]+)/i)?.[1]?.trim() || null;
+
     const healthRecord = await this.prisma.healthRecord.create({
       data: {
         patientId: userId,
         createdById: userId,
         type: dto.recordType || entity.recordType,
         title: dto.title || entity.title,
-        description: dto.description || entity.description,
+        description: desc,
+        facilityName: extractedFacility,
         eventDate: dto.eventDate ? new Date(dto.eventDate) : new Date(),
         verificationStatus: dto.verificationStatus || VerificationStatus.PATIENT_CONFIRMED,
         documentId: entity.documentId,
