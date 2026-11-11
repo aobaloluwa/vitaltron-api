@@ -38,7 +38,7 @@ export class AiExtractorService {
 
     const textToAnalyze = ocrText.trim();
 
-    // 2. Extract structured medical findings, lab tests, CBC panels, prescriptions, vitals
+    // 2. Extract structured medical findings, lab tests, prescriptions, vitals into a single unified summary entity
     const items = this.parseMedicalEntities(textToAnalyze, input.fileName);
 
     return {
@@ -91,7 +91,6 @@ export class AiExtractorService {
   }
 
   private parseMedicalEntities(ocrText: string, fileName: string): ExtractedItem[] {
-    const items: ExtractedItem[] = [];
     const lines = ocrText
       .split(/\r?\n/)
       .map((l) => l.trim())
@@ -100,92 +99,75 @@ export class AiExtractorService {
     let hospitalName: string | null = null;
     let patientName: string | null = null;
     let doctorName: string | null = null;
+    let reportDate: string | null = null;
 
-    // Extract metadata from OCR text headers
+    const findings: string[] = [];
+    let primaryRecordType: RecordType = RecordType.CLINICAL_NOTE;
+
+    // Extract metadata headers and consolidate all findings into one unified report
     for (const line of lines) {
+      if (line.length < 3) continue;
+      if (/^(page|date|time|id|mrn|dob)[:\s]/i.test(line)) {
+        if (/date/i.test(line)) reportDate = line.replace(/^date[:\s]*/i, '').trim();
+        continue;
+      }
+
       const hospMatch = line.match(/(?:hospital|clinic|center|medical center|lab|laboratory)\s*[:=\-]?\s*([a-z0-9\s]{3,})/i);
-      if (hospMatch && !hospitalName) hospitalName = hospMatch[1].trim();
+      if (hospMatch && !hospitalName) {
+        hospitalName = hospMatch[1].trim();
+        continue;
+      }
 
       const patMatch = line.match(/(?:patient|name)\s*[:=\-]?\s*([a-z\s]{3,})/i);
-      if (patMatch && !patientName && !patMatch[1].toLowerCase().includes('report') && !patMatch[1].toLowerCase().includes('date')) {
+      if (patMatch && !patientName && !patMatch[1].toLowerCase().includes('report')) {
         patientName = patMatch[1].trim();
+        continue;
       }
 
       const docMatch = line.match(/(?:doctor|physician|dr\.?)\s*[:=\-]?\s*([a-z\s]{3,})/i);
-      if (docMatch && !doctorName) doctorName = `Dr. ${docMatch[1].trim().replace(/^dr\.?\s*/i, '')}`;
-    }
-
-    // Parse actual OCR text lines into structured medical items accurately
-    if (lines.length > 0) {
-      for (let i = 0; i < lines.length; i++) {
-        const line = lines[i];
-
-        if (line.length < 3) continue;
-        if (/^(page|date|time|id|mrn|dob)[:\s]/i.test(line)) continue;
-
-        let recordType: RecordType = RecordType.CLINICAL_NOTE;
-        let title = line.length > 40 ? line.substring(0, 37) + '...' : line;
-        let description = line;
-
-        // Detect Vital Signs
-        const bpMatch = line.match(/\b(?:bp|blood pressure)\s*[:=\-]?\s*(\d{2,3}\/\d{2,3})\s*(?:mmhg)?/i);
-        const hrMatch = line.match(/\b(?:hr|heart rate|pulse)\s*[:=\-]?\s*(\d{2,3})\s*(?:bpm)?/i);
-        const tempMatch = line.match(/\b(?:temp|temperature)\s*[:=\-]?\s*([\d\.]+)\s*(?:[f|c])?/i);
-        const spo2Match = line.match(/\b(?:spo2|oxygen saturation)\s*[:=\-]?\s*(\d{2,3})\s*%/i);
-
-        if (bpMatch || hrMatch || tempMatch || spo2Match) {
-          recordType = RecordType.VITAL_SIGN;
-          if (bpMatch) title = `Blood Pressure: ${bpMatch[1]} mmHg`;
-          else if (hrMatch) title = `Heart Rate: ${hrMatch[1]} bpm`;
-          else if (tempMatch) title = `Temperature: ${tempMatch[1]} °F`;
-          else if (spo2Match) title = `SpO2: ${spo2Match[1]}%`;
-        }
-        // Detect Medications
-        else if (/\b(?:mg|mcg|ml|g|tablet|capsule|syrup|mg\/dl)\b/i.test(line) && /\b(take|po|bid|qid|daily|mg)\b/i.test(line) || /^\d+\.\s+[a-z]+\s+\d+mg/i.test(line)) {
-          recordType = RecordType.MEDICATION;
-          title = line.split(/[:\-]/)[0]?.trim() || 'Prescription Item';
-        }
-        // Detect Lab Tests
-        else if (/\b(?:mg\/dl|g\/dl|mmol\/l|u\/l|10\^\d|\%|cells\/ul|fl|pg|mm\/hr|result|value)\b/i.test(line) || /[:=]\s*[\d\.]+/i.test(line)) {
-          recordType = RecordType.LAB_TEST;
-          const parts = line.split(/[:=\-]+/);
-          if (parts.length >= 2) {
-            title = parts[0].trim();
-            description = `Finding: ${line}`;
-          }
-        }
-        // Detect Diagnoses
-        else if (/\b(?:diagnosis|impression|findings|condition|assessment)\b/i.test(line)) {
-          recordType = RecordType.DIAGNOSIS;
-          title = 'Clinical Finding / Diagnosis';
-        }
-
-        const descParts = [description];
-        if (patientName) descParts.push(`Patient: ${patientName}`);
-        if (hospitalName) descParts.push(`Hospital: ${hospitalName}`);
-        if (doctorName) descParts.push(`Doctor: ${doctorName}`);
-
-        items.push({
-          recordType,
-          title: this.capitalizeWords(title),
-          description: descParts.join(' | '),
-          confidenceScore: 0.95,
-        });
+      if (docMatch && !doctorName) {
+        doctorName = `Dr. ${docMatch[1].trim().replace(/^dr\.?\s*/i, '')}`;
+        continue;
       }
+
+      // Determine primary record category
+      if (/\b(?:bp|blood pressure|heart rate|pulse|temp|spo2)\b/i.test(line)) {
+        if (primaryRecordType === RecordType.CLINICAL_NOTE) primaryRecordType = RecordType.VITAL_SIGN;
+      } else if (/\b(?:mg|mcg|ml|g|tablet|capsule|syrup)\b/i.test(line)) {
+        if (primaryRecordType === RecordType.CLINICAL_NOTE) primaryRecordType = RecordType.MEDICATION;
+      } else if (/\b(?:mg\/dl|g\/dl|mmol\/l|u\/l|result|value|cbc|hemoglobin|cholesterol|glucose)\b/i.test(line)) {
+        if (primaryRecordType === RecordType.CLINICAL_NOTE) primaryRecordType = RecordType.LAB_TEST;
+      } else if (/\b(?:diagnosis|impression|findings)\b/i.test(line)) {
+        if (primaryRecordType === RecordType.CLINICAL_NOTE) primaryRecordType = RecordType.DIAGNOSIS;
+      }
+
+      findings.push(line);
     }
 
-    // Fallback if OCR text is empty
-    if (items.length === 0) {
-      const cleanTitle = this.formatCleanName(fileName);
-      items.push({
-        recordType: RecordType.CLINICAL_NOTE,
+    const cleanTitle = this.formatCleanName(fileName);
+    const descParts: string[] = [];
+
+    if (hospitalName) descParts.push(`Hospital/Facility: ${hospitalName}`);
+    if (doctorName) descParts.push(`Doctor: ${doctorName}`);
+    if (patientName) descParts.push(`Patient: ${patientName}`);
+    if (reportDate) descParts.push(`Date: ${reportDate}`);
+
+    if (findings.length > 0) {
+      descParts.push(`Findings & Results:\n• ` + findings.join('\n• '));
+    } else if (ocrText.trim().length > 0) {
+      descParts.push(`Extracted Text:\n${ocrText.trim()}`);
+    } else {
+      descParts.push(`Scanned Document: ${fileName}`);
+    }
+
+    return [
+      {
+        recordType: primaryRecordType,
         title: cleanTitle,
-        description: `Scanned Document: ${fileName}${hospitalName ? ` | Hospital: ${hospitalName}` : ''}`,
-        confidenceScore: 0.90,
-      });
-    }
-
-    return items;
+        description: descParts.join(' | '),
+        confidenceScore: 0.96,
+      },
+    ];
   }
 
   private formatCleanName(fileName: string): string {
@@ -193,7 +175,7 @@ export class AiExtractorService {
     name = name.replace(/[-_]/g, ' ');
     name = name.replace(/\b(scan|file|doc|img|image|photo|\d+)\b/gi, '');
     name = name.replace(/\s+/g, ' ').trim();
-    if (!name) return 'Complete Blood Count Report';
+    if (!name) return 'Medical Report';
 
     return this.capitalizeWords(name);
   }
