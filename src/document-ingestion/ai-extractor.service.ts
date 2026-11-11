@@ -24,17 +24,17 @@ export class AiExtractorService {
   ): Promise<{ text: string; items: ExtractedItem[] }> {
     let ocrText = input.rawText || '';
 
-    // 1. Perform OpenRouter Multimodal Vision AI Extraction with OpenAI GPT-4o-mini
+    // 1. Perform OpenRouter Multimodal Vision AI Extraction with Cascading Fallback Models
     if (!ocrText && (input.dataUri || input.fileUrl)) {
       try {
         ocrText = await this.performOpenRouterVisionExtraction(input.dataUri, input.fileUrl);
         if (ocrText) {
-          this.logger.log(`OpenRouter Vision AI extraction succeeded. Extracted ${ocrText.length} characters.`);
+          this.logger.log(`OpenRouter Vision AI cascading extraction succeeded. Extracted ${ocrText.length} characters.`);
         } else {
-          this.logger.warn(`OpenRouter Vision AI returned empty text for document: ${input.fileName}`);
+          this.logger.warn(`All OpenRouter Vision models returned empty or refused for document: ${input.fileName}`);
         }
       } catch (visionErr) {
-        this.logger.warn(`OpenRouter Vision AI extraction error: ${visionErr}`);
+        this.logger.warn(`OpenRouter Vision AI cascading extraction error: ${visionErr}`);
       }
     }
 
@@ -63,58 +63,72 @@ export class AiExtractorService {
 
     const formattedImageUrl = imageUrl.startsWith('data:') ? imageUrl : `data:image/jpeg;base64,${imageUrl}`;
 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 35000);
+    // Cascading fallback array of robust vision models on OpenRouter
+    const modelsToTry = [
+      'google/gemini-2.5-flash',
+      'google/gemini-flash-1.5',
+      'openai/gpt-4o-mini',
+      'google/gemini-2.0-flash-exp:free',
+      'openai/gpt-4o'
+    ];
 
-    try {
-      const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`,
-          'HTTP-Referer': 'https://vitaltron.app',
-          'X-Title': 'Vitaltron Health Mobile',
-        },
-        body: JSON.stringify({
-          model: 'openai/gpt-4o-mini',
-          messages: [
-            {
-              role: 'user',
-              content: [
-                {
-                  type: 'text',
-                  text: 'You are an expert clinical AI assistant. Analyze this medical report, lab test, prescription, or health document image with 100% precision. Extract and output:\n1. Hospital / Clinic / Facility Name\n2. Attending Doctor / Physician Name\n3. Patient Name\n4. Report Date\n5. All extracted test results, lab values, vital signs, medications, diagnoses, and findings in detail.\nBe extremely thorough, accurate, and faithful to the image content.'
-                },
-                {
-                  type: 'image_url',
-                  image_url: {
-                    url: formattedImageUrl
+    for (const model of modelsToTry) {
+      try {
+        this.logger.log(`Attempting document vision extraction with OpenRouter model: ${model}`);
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 25000);
+
+        const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`,
+            'HTTP-Referer': 'https://vitaltron.app',
+            'X-Title': 'Vitaltron Health Mobile',
+          },
+          body: JSON.stringify({
+            model,
+            messages: [
+              {
+                role: 'user',
+                content: [
+                  {
+                    type: 'text',
+                    text: 'You are an expert clinical AI assistant. Analyze this medical report, lab test, prescription, or health document image with 100% precision. Extract and output:\n1. Hospital / Clinic / Facility Name\n2. Attending Doctor / Physician Name\n3. Patient Name\n4. Report Date\n5. All extracted test results, lab values, vital signs, medications, diagnoses, and findings in detail.\nBe extremely thorough, accurate, and faithful to the image content.'
+                  },
+                  {
+                    type: 'image_url',
+                    image_url: {
+                      url: formattedImageUrl
+                    }
                   }
-                }
-              ]
-            }
-          ],
-          max_tokens: 1500,
-        }),
-        signal: controller.signal,
-      });
+                ]
+              }
+            ],
+            max_tokens: 1500,
+          }),
+          signal: controller.signal,
+        });
 
-      clearTimeout(timeoutId);
+        clearTimeout(timeoutId);
 
-      if (!response.ok) {
-        const errBody = await response.text();
-        this.logger.warn(`OpenRouter API error status ${response.status}: ${errBody}`);
-        return '';
+        if (!response.ok) {
+          const errBody = await response.text();
+          this.logger.warn(`Model ${model} error status ${response.status}: ${errBody}`);
+          continue;
+        }
+
+        const data = await response.json();
+        const content = data?.choices?.[0]?.message?.content;
+        if (content && !content.toLowerCase().includes("i'm unable to assist with that") && !content.toLowerCase().includes("i cannot assist")) {
+          this.logger.log(`Successfully extracted text using model: ${model}`);
+          return content;
+        } else {
+          this.logger.warn(`Model ${model} refused or returned empty content: ${content}`);
+        }
+      } catch (e) {
+        this.logger.warn(`Model ${model} failed with exception: ${e}`);
       }
-
-      const data = await response.json();
-      const content = data?.choices?.[0]?.message?.content;
-      if (content) {
-        return content;
-      }
-    } catch (e) {
-      clearTimeout(timeoutId);
-      this.logger.warn(`OpenRouter request failed: ${e}`);
     }
 
     return '';
