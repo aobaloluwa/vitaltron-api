@@ -225,4 +225,84 @@ export class HealthRecordsService {
 
     return { success: true, id: recordId };
   }
+
+  async globalSearch(userId: string, queryTerm: string) {
+    const q = queryTerm ? queryTerm.trim() : '';
+    if (!q) {
+      return {
+        records: [],
+        documents: [],
+        extractedEntities: [],
+        dependents: [],
+      };
+    }
+
+    const [records, documents, extractedEntities, familyRels] = await Promise.all([
+      // 1. Search Health Records
+      this.prisma.healthRecord.findMany({
+        where: {
+          patientId: userId,
+          OR: [
+            { title: { contains: q, mode: 'insensitive' } },
+            { description: { contains: q, mode: 'insensitive' } },
+            { facilityName: { contains: q, mode: 'insensitive' } },
+            { severity: { contains: q, mode: 'insensitive' } },
+          ],
+        },
+        orderBy: { eventDate: 'desc' },
+        take: 20,
+      }),
+
+      // 2. Search Medical Documents
+      this.prisma.medicalDocument.findMany({
+        where: {
+          userId,
+          OR: [
+            { fileName: { contains: q, mode: 'insensitive' } },
+            { extractedText: { contains: q, mode: 'insensitive' } },
+            { fileType: { contains: q, mode: 'insensitive' } },
+          ],
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 10,
+      }),
+
+      // 3. Search Extracted AI Entities
+      this.prisma.extractedEntity.findMany({
+        where: {
+          document: { userId },
+          OR: [
+            { title: { contains: q, mode: 'insensitive' } },
+            { description: { contains: q, mode: 'insensitive' } },
+          ],
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 10,
+      }),
+
+      // 4. Search Family Dependents
+      this.prisma.familyRelationship.findMany({
+        where: { primaryUserId: userId },
+        include: { dependentUser: true },
+      }),
+    ]);
+
+    const matchingDependents = familyRels
+      .map((rel) => rel.dependentUser)
+      .filter((dep) => dep.displayName && dep.displayName.toLowerCase().includes(q.toLowerCase()));
+
+    await this.auditService.log({
+      action: 'GLOBAL_APP_SEARCH',
+      actorUserId: userId,
+      targetPatientId: userId,
+      details: { queryTerm: q, resultsCount: records.length + documents.length + extractedEntities.length },
+    });
+
+    return {
+      records,
+      documents,
+      extractedEntities,
+      dependents: matchingDependents,
+    };
+  }
 }

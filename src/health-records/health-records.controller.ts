@@ -16,6 +16,11 @@ export class HealthRecordsController {
     return this.healthRecordsService.createRecord(req.user.id, dto);
   }
 
+  @Get('search')
+  async globalSearch(@Request() req: any, @Query('q') queryTerm: string) {
+    return this.healthRecordsService.globalSearch(req.user.id, queryTerm);
+  }
+
   @Get('timeline')
   async getTimeline(@Request() req: any, @Query() query: QueryTimelineDto) {
     return this.healthRecordsService.getTimeline(req.user.id, query);
