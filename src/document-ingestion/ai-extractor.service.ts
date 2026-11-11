@@ -92,124 +92,97 @@ export class AiExtractorService {
 
   private parseMedicalEntities(ocrText: string, fileName: string): ExtractedItem[] {
     const items: ExtractedItem[] = [];
-    const lowerFull = (ocrText + ' ' + fileName).toLowerCase();
-
-    // Patient & Hospital Header Info Detection (Dynamic extraction ONLY - NO hardcoded fallbacks)
-    let hospitalName: string | null = null;
-    let patientName: string | null = null;
-    let doctorName: string | null = null;
-
-    const hospitalMatch = ocrText.match(/(?:hospital|clinic|center|medical center|lab)\s*[:=\-]?\s*([a-z0-9\s]+)/i);
-    if (hospitalMatch && hospitalMatch[1].trim().length > 3) {
-      hospitalName = hospitalMatch[1].trim();
-    }
-
-    const patientMatch = ocrText.match(/name\s*[:=\-]?\s*([a-z\s]+)/i);
-    if (patientMatch && patientMatch[1].trim().length > 2) {
-      patientName = patientMatch[1].trim();
-    }
-
-    const doctorMatch = ocrText.match(/doctor\s*[:=\-]?\s*([a-z\s]+)/i);
-    if (doctorMatch && doctorMatch[1].trim().length > 2) {
-      doctorName = `Dr. ${doctorMatch[1].trim()}`;
-    }
-
-    // Complete Blood Count (CBC) Comprehensive 18-Test Panel
-    const CBC_SPECS = [
-      { key: 'hemoglobin', title: 'Hemoglobin (Hb)', defaultResult: '12', defaultRange: '11.0 - 16.0', unit: 'g/dL', isLow: false },
-      { key: 'rbc', title: 'Red Blood Cell Count (RBC)', defaultResult: '3.3', defaultRange: '3.5 - 5.50', unit: '10^6/uL', isLow: true },
-      { key: 'hct', title: 'Hematocrit (HCT)', defaultResult: '36', defaultRange: '37.0 - 50.0', unit: '%', isLow: true },
-      { key: 'mcv', title: 'Mean Corpuscular Volume (MCV)', defaultResult: '83', defaultRange: '82 - 95', unit: 'fl', isLow: false },
-      { key: 'mch', title: 'Mean Corpuscular Hemoglobin (MCH)', defaultResult: '28', defaultRange: '27 - 31', unit: 'pg', isLow: false },
-      { key: 'mchc', title: 'Mean Corpuscular Hb Concentration (MCHC)', defaultResult: '33', defaultRange: '32.0 - 36.0', unit: 'g/dL', isLow: false },
-      { key: 'rdw-cv', title: 'Red Cell Distribution Width (RDW-CV)', defaultResult: '12', defaultRange: '11.5 - 14.5', unit: '%', isLow: false },
-      { key: 'rdw-sd', title: 'Red Cell Distribution Width (RDW-SD)', defaultResult: '44', defaultRange: '35 - 56', unit: 'fl', isLow: false },
-      { key: 'wbc', title: 'White Blood Cell Count (WBC)', defaultResult: '6.7', defaultRange: '4.5 - 11.0', unit: '10^3/uL', isLow: false },
-      { key: 'neu%', title: 'Neutrophils % (NEU%)', defaultResult: '60', defaultRange: '40 - 70', unit: '%', isLow: false },
-      { key: 'lym%', title: 'Lymphocytes % (LYM%)', defaultResult: '30', defaultRange: '20 - 45', unit: '%', isLow: false },
-      { key: 'mon%', title: 'Monocytes % (MON%)', defaultResult: '8', defaultRange: '2 - 10', unit: '%', isLow: false },
-      { key: 'eos%', title: 'Eosinophils % (EOS%)', defaultResult: '2', defaultRange: '1 - 6', unit: '%', isLow: false },
-      { key: 'bas%', title: 'Basophils % (BAS%)', defaultResult: '0', defaultRange: '0 - 2', unit: '%', isLow: false },
-      { key: 'lym#', title: 'Lymphocytes Absolute (LYM#)', defaultResult: '2', defaultRange: '1.5 - 4.0', unit: '10^3/uL', isLow: false },
-      { key: 'gra#', title: 'Granulocytes Absolute (GRA#)', defaultResult: '4.7', defaultRange: '2.0 - 7.5', unit: '10^3/uL', isLow: false },
-      { key: 'plt', title: 'Platelet Count (PLT)', defaultResult: '256', defaultRange: '150 - 450', unit: '10^3/uL', isLow: false },
-      { key: 'esr', title: 'Erythrocyte Sedimentation Rate (ESR)', defaultResult: '2', defaultRange: 'Up to 15', unit: 'mm/hr', isLow: false },
-    ];
-
     const lines = ocrText
       .split(/\r?\n/)
       .map((l) => l.trim())
       .filter((l) => l.length > 0);
 
-    for (const spec of CBC_SPECS) {
-      const regex = new RegExp(`\\b${spec.key}\\b\\s*[:=\\-\\s]?\\s*([\\d\\.]+)?`, 'i');
-      let foundLine: string | null = null;
-      let matchedVal: string | null = null;
+    let hospitalName: string | null = null;
+    let patientName: string | null = null;
+    let doctorName: string | null = null;
 
-      for (const line of lines) {
-        if (regex.test(line)) {
-          foundLine = line;
-          const match = line.match(regex);
-          if (match && match[1]) matchedVal = match[1];
-          break;
-        }
+    // Extract metadata from OCR text headers
+    for (const line of lines) {
+      const hospMatch = line.match(/(?:hospital|clinic|center|medical center|lab|laboratory)\s*[:=\-]?\s*([a-z0-9\s]{3,})/i);
+      if (hospMatch && !hospitalName) hospitalName = hospMatch[1].trim();
+
+      const patMatch = line.match(/(?:patient|name)\s*[:=\-]?\s*([a-z\s]{3,})/i);
+      if (patMatch && !patientName && !patMatch[1].toLowerCase().includes('report') && !patMatch[1].toLowerCase().includes('date')) {
+        patientName = patMatch[1].trim();
       }
 
-      if (foundLine || lowerFull.includes(spec.key) || lowerFull.includes('blood count') || lowerFull.includes('cbc') || lowerFull.includes('lab') || lowerFull.includes('report')) {
-        const val = matchedVal || spec.defaultResult;
-        const statusTag = spec.isLow ? 'Below Range' : 'In-Range';
-        const titleText = spec.title.trim();
+      const docMatch = line.match(/(?:doctor|physician|dr\.?)\s*[:=\-]?\s*([a-z\s]{3,})/i);
+      if (docMatch && !doctorName) doctorName = `Dr. ${docMatch[1].trim().replace(/^dr\.?\s*/i, '')}`;
+    }
 
-        const descParts = [
-          `Result: ${val} ${spec.unit}`,
-          `Reference Range: ${spec.defaultRange} ${spec.unit}`,
-          `Status: ${statusTag}`,
-        ];
+    // Parse actual OCR text lines into structured medical items accurately
+    if (lines.length > 0) {
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+
+        if (line.length < 3) continue;
+        if (/^(page|date|time|id|mrn|dob)[:\s]/i.test(line)) continue;
+
+        let recordType: RecordType = RecordType.CLINICAL_NOTE;
+        let title = line.length > 40 ? line.substring(0, 37) + '...' : line;
+        let description = line;
+
+        // Detect Vital Signs
+        const bpMatch = line.match(/\b(?:bp|blood pressure)\s*[:=\-]?\s*(\d{2,3}\/\d{2,3})\s*(?:mmhg)?/i);
+        const hrMatch = line.match(/\b(?:hr|heart rate|pulse)\s*[:=\-]?\s*(\d{2,3})\s*(?:bpm)?/i);
+        const tempMatch = line.match(/\b(?:temp|temperature)\s*[:=\-]?\s*([\d\.]+)\s*(?:[f|c])?/i);
+        const spo2Match = line.match(/\b(?:spo2|oxygen saturation)\s*[:=\-]?\s*(\d{2,3})\s*%/i);
+
+        if (bpMatch || hrMatch || tempMatch || spo2Match) {
+          recordType = RecordType.VITAL_SIGN;
+          if (bpMatch) title = `Blood Pressure: ${bpMatch[1]} mmHg`;
+          else if (hrMatch) title = `Heart Rate: ${hrMatch[1]} bpm`;
+          else if (tempMatch) title = `Temperature: ${tempMatch[1]} °F`;
+          else if (spo2Match) title = `SpO2: ${spo2Match[1]}%`;
+        }
+        // Detect Medications
+        else if (/\b(?:mg|mcg|ml|g|tablet|capsule|syrup|mg\/dl)\b/i.test(line) && /\b(take|po|bid|qid|daily|mg)\b/i.test(line) || /^\d+\.\s+[a-z]+\s+\d+mg/i.test(line)) {
+          recordType = RecordType.MEDICATION;
+          title = line.split(/[:\-]/)[0]?.trim() || 'Prescription Item';
+        }
+        // Detect Lab Tests
+        else if (/\b(?:mg\/dl|g\/dl|mmol\/l|u\/l|10\^\d|\%|cells\/ul|fl|pg|mm\/hr|result|value)\b/i.test(line) || /[:=]\s*[\d\.]+/i.test(line)) {
+          recordType = RecordType.LAB_TEST;
+          const parts = line.split(/[:=\-]+/);
+          if (parts.length >= 2) {
+            title = parts[0].trim();
+            description = `Finding: ${line}`;
+          }
+        }
+        // Detect Diagnoses
+        else if (/\b(?:diagnosis|impression|findings|condition|assessment)\b/i.test(line)) {
+          recordType = RecordType.DIAGNOSIS;
+          title = 'Clinical Finding / Diagnosis';
+        }
+
+        const descParts = [description];
         if (patientName) descParts.push(`Patient: ${patientName}`);
         if (hospitalName) descParts.push(`Hospital: ${hospitalName}`);
         if (doctorName) descParts.push(`Doctor: ${doctorName}`);
 
         items.push({
-          recordType: RecordType.LAB_TEST,
-          title: titleText,
+          recordType,
+          title: this.capitalizeWords(title),
           description: descParts.join(' | '),
-          confidenceScore: foundLine ? 0.98 : 0.93,
+          confidenceScore: 0.95,
         });
       }
     }
 
-    // Prescription & Vitals extraction regex rules
-    const vitalBpRegex = /\b(?:bp|blood pressure)\s*[:=\-]?\s*(\d{2,3}\/\d{2,3})\s*(?:mmhg)?/i;
-    const medRegex = /\b(amoxicillin|metformin|lisinopril|atorvastatin|paracetamol|ibuprofen|omeprazole|amlodipine|ciprofloxacin|augmentin|azithromycin|aspirin)\b\s*(\d+\s*(?:mg|mcg|ml|g))?/i;
-
-    for (const line of lines) {
-      const bpMatch = line.match(vitalBpRegex);
-      if (bpMatch) {
-        const descParts = [`Result: ${bpMatch[1]} mmHg`, 'Status: Normal'];
-        if (hospitalName) descParts.push(`Hospital: ${hospitalName}`);
-
-        items.push({
-          recordType: RecordType.VITAL_SIGN,
-          title: `Blood Pressure: ${bpMatch[1]} mmHg`,
-          description: descParts.join(' | '),
-          confidenceScore: 0.96,
-        });
-      }
-
-      const medMatch = line.match(medRegex);
-      if (medMatch) {
-        const medName = this.capitalizeWords(medMatch[1]);
-        const dosage = medMatch[2] ? medMatch[2] : '';
-        const descParts = [`Prescribed Dosage: "${line}"`];
-        if (doctorName) descParts.push(`Doctor: ${doctorName}`);
-
-        items.push({
-          recordType: RecordType.MEDICATION,
-          title: `Prescription: ${medName} ${dosage}`.trim(),
-          description: descParts.join(' | '),
-          confidenceScore: 0.94,
-        });
-      }
+    // Fallback if OCR text is empty
+    if (items.length === 0) {
+      const cleanTitle = this.formatCleanName(fileName);
+      items.push({
+        recordType: RecordType.CLINICAL_NOTE,
+        title: cleanTitle,
+        description: `Scanned Document: ${fileName}${hospitalName ? ` | Hospital: ${hospitalName}` : ''}`,
+        confidenceScore: 0.90,
+      });
     }
 
     return items;
