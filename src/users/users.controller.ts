@@ -15,6 +15,14 @@ export class UsersController {
     return this.usersService.getUserProfile(req.user.id);
   }
 
+  @Patch('me')
+  async updateUserInfo(
+    @Request() req: any,
+    @Body() body: { displayName?: string; avatarUrl?: string; preferredLanguage?: string },
+  ) {
+    return this.usersService.updateUserInfo(req.user.id, body);
+  }
+
   @Patch('me/patient-profile')
   async updatePatientProfile(@Request() req: any, @Body() dto: UpdatePatientProfileDto) {
     return this.usersService.updatePatientProfile(req.user.id, dto);

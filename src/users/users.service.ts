@@ -34,7 +34,55 @@ export class UsersService {
     }
 
     const { passwordHash, ...result } = user;
-    return result;
+
+    // Extract avatarUrl if stored in allergiesSummary
+    let avatarUrl: string | null = null;
+    const rawAllergies = user.patientProfile?.allergiesSummary || '';
+    const avatarMatch = rawAllergies.match(/AVATAR_URL:([^\s;]+)/i);
+    if (avatarMatch) {
+      avatarUrl = avatarMatch[1];
+    }
+
+    return {
+      ...result,
+      avatarUrl,
+      preferredLanguage: user.patientProfile?.primaryLanguage || 'en',
+    };
+  }
+
+  async updateUserInfo(userId: string, body: { displayName?: string; avatarUrl?: string; preferredLanguage?: string }) {
+    if (body.displayName) {
+      await this.prisma.user.update({
+        where: { id: userId },
+        data: { displayName: body.displayName },
+      });
+    }
+
+    if (body.preferredLanguage || body.avatarUrl) {
+      const existing = await this.prisma.patientProfile.findUnique({ where: { userId } });
+      const currentAllergies = existing?.allergiesSummary || '';
+      let updatedAllergies = currentAllergies;
+
+      if (body.avatarUrl) {
+        const cleaned = currentAllergies.replace(/AVATAR_URL:[^\s;]+/gi, '').trim();
+        updatedAllergies = `AVATAR_URL:${body.avatarUrl}; ${cleaned}`;
+      }
+
+      await this.prisma.patientProfile.upsert({
+        where: { userId },
+        create: {
+          userId,
+          primaryLanguage: body.preferredLanguage || 'en',
+          allergiesSummary: body.avatarUrl ? `AVATAR_URL:${body.avatarUrl}` : undefined,
+        },
+        update: {
+          ...(body.preferredLanguage && { primaryLanguage: body.preferredLanguage }),
+          ...(body.avatarUrl && { allergiesSummary: updatedAllergies }),
+        },
+      });
+    }
+
+    return this.getUserProfile(userId);
   }
 
   async updatePatientProfile(userId: string, dto: UpdatePatientProfileDto) {
