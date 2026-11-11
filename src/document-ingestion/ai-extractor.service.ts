@@ -24,7 +24,7 @@ export class AiExtractorService {
   ): Promise<{ text: string; items: ExtractedItem[] }> {
     let ocrText = input.rawText || '';
 
-    // 1. Perform OCR on snapped image (prioritize base64 dataUri for maximum reliability)
+    // 1. Perform OCR on snapped image (prioritize base64 dataUri with correct OCR Space prefix)
     if (!ocrText && (input.dataUri || input.fileUrl)) {
       try {
         ocrText = await this.performOcr(input.dataUri, input.fileUrl);
@@ -40,7 +40,7 @@ export class AiExtractorService {
 
     const textToAnalyze = ocrText.trim();
 
-    // 2. Parse actual extracted OCR text (NO mock data or fake defaults)
+    // 2. Parse actual extracted OCR text (Strictly NO mock data)
     const items = this.parseMedicalEntities(textToAnalyze, input.fileName);
 
     return {
@@ -56,10 +56,10 @@ export class AiExtractorService {
     bodyParams.append('isTable', 'true');
     bodyParams.append('OCREngine', '2');
 
-    // Prioritize base64 dataUri (strip data prefix if present for OCR Space compatibility)
+    // OCR Space requires data:image/...;base64,... format for base64Image parameter
     if (dataUri && dataUri.length > 50) {
-      const base64Data = dataUri.includes('base64,') ? dataUri.split('base64,')[1] : dataUri;
-      bodyParams.append('base64Image', base64Data);
+      const formattedDataUri = dataUri.startsWith('data:') ? dataUri : `data:image/jpeg;base64,${dataUri}`;
+      bodyParams.append('base64Image', formattedDataUri);
     } else if (fileUrl && fileUrl.startsWith('http') && !fileUrl.includes('vitaltron_documents')) {
       bodyParams.append('url', fileUrl);
     } else {
@@ -67,7 +67,7 @@ export class AiExtractorService {
     }
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000);
+    const timeoutId = setTimeout(() => controller.abort(), 20000);
 
     try {
       const response = await fetch('https://api.ocr.space/parse/image', {
@@ -78,9 +78,17 @@ export class AiExtractorService {
       });
       clearTimeout(timeoutId);
 
-      if (!response.ok) return '';
+      if (!response.ok) {
+        this.logger.warn(`OCR Space HTTP error status: ${response.status}`);
+        return '';
+      }
 
       const data = await response.json();
+      this.logger.log(`OCR Space response received. IsError: ${data?.IsErroredOnProcessing}`);
+      if (data?.IsErroredOnProcessing) {
+        this.logger.warn(`OCR Space Error Message: ${JSON.stringify(data.ErrorMessage)}`);
+      }
+
       if (data?.ParsedResults && data.ParsedResults.length > 0) {
         const text = data.ParsedResults.map((r: any) => r.ParsedText || '').join('\n');
         return text;
