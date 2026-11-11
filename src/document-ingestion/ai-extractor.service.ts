@@ -94,7 +94,7 @@ export class AiExtractorService {
                 content: [
                   {
                     type: 'text',
-                    text: 'You are an expert clinical AI assistant. Analyze this medical report, lab test, prescription, or health document image with 100% precision. Extract and output:\n1. Hospital / Clinic / Facility Name\n2. Attending Doctor / Physician Name\n3. Patient Name\n4. Report Date\n5. All extracted test results, lab values, vital signs, medications, diagnoses, and findings in detail.\nBe extremely thorough, accurate, and faithful to the image content.'
+                    text: 'You are an expert clinical AI assistant. Analyze this medical report, lab test, prescription, or health document image with absolute 100% precision and accuracy. Extract and output:\n- HOSPITAL/CLINIC:\n- DOCTOR/PHYSICIAN:\n- PATIENT:\n- DATE:\n- FINDINGS & TEST RESULTS:\nBe extremely thorough, capturing all numbers, units, ranges, and clinical notes verbatim without omissions.'
                   },
                   {
                     type: 'image_url',
@@ -152,7 +152,9 @@ export class AiExtractorService {
       if (line.length < 2) continue;
 
       const lower = line.toLowerCase();
-      const hospMatch = line.match(/(?:hospital|clinic|center|medical center|lab|laboratory|facility)\s*[:=\-]?\s*([a-z0-9\s]{3,})/i);
+
+      const hospMatch = line.match(/(?:hospital|clinic|center|medical center|lab|laboratory|facility)\s*[:=\-]?\s*([a-z0-9\s]{3,})/i) ||
+                        line.match(/(?:HOSPITAL|CLINIC|FACILITY)\/?[A-Z\s:]+([A-Za-z0-9\s]{3,})/);
       if (hospMatch && !hospitalName) {
         hospitalName = hospMatch[1].trim();
         continue;
@@ -164,7 +166,8 @@ export class AiExtractorService {
         continue;
       }
 
-      const docMatch = line.match(/(?:doctor|physician|dr\.?)\s*[:=\-]?\s*([a-z\s]{3,})/i);
+      const docMatch = line.match(/(?:doctor|physician|dr\.?)\s*[:=\-]?\s*([a-z\s]{3,})/i) ||
+                       line.match(/Dr\.?\s+([A-Za-z\s]+)/);
       if (docMatch && !doctorName) {
         doctorName = `Dr. ${docMatch[1].trim().replace(/^dr\.?\s*/i, '')}`;
         continue;
@@ -199,16 +202,16 @@ export class AiExtractorService {
     if (reportDate) descParts.push(`Date: ${reportDate}`);
 
     if (findings.length > 0) {
-      descParts.push(`AI Analysis & Findings:\n` + findings.join('\n'));
+      descParts.push(`Document Content & Findings:\n` + findings.join('\n'));
     } else {
-      descParts.push(`Scanned Document: ${fileName}`);
+      descParts.push(`Scanned Document: ${fileName}\n\nFull Text:\n${ocrText}`);
     }
 
     return [
       {
         recordType: primaryRecordType,
         title: cleanTitle,
-        description: descParts.join(' | '),
+        description: descParts.join('\n\n'),
         confidenceScore: 0.99,
       },
     ];
