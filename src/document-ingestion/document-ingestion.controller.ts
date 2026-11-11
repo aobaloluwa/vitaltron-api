@@ -36,6 +36,7 @@ export class DocumentIngestionController {
       fileSize?: number;
       rawText?: string;
       dataUri?: string;
+      uploadSource?: string;
     },
   ) {
     let fileUrl = body?.fileUrl;
@@ -80,6 +81,7 @@ export class DocumentIngestionController {
       fileSize,
       rawText: body?.rawText,
       dataUri: effectiveDataUri,
+      uploadSource: body?.uploadSource,
     });
   }
 

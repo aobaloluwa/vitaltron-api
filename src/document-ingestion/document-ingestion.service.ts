@@ -15,7 +15,25 @@ export class DocumentIngestionService {
     private readonly auditService: AuditService,
   ) {}
 
-  async createDocument(userId: string, fileData: { fileName: string; fileUrl: string; fileType: string; fileSize: number; rawText?: string; dataUri?: string }) {
+  async createDocument(
+    userId: string,
+    fileData: {
+      fileName: string;
+      fileUrl: string;
+      fileType: string;
+      fileSize: number;
+      rawText?: string;
+      dataUri?: string;
+      uploadSource?: string;
+    },
+  ) {
+    const isAvatar =
+      fileData.uploadSource === 'PROFILE_AVATAR' ||
+      fileData.fileName.toLowerCase().startsWith('avatar_') ||
+      fileData.fileName.toLowerCase().includes('avatar');
+
+    const source = isAvatar ? 'PROFILE_AVATAR' : fileData.uploadSource || 'USER_UPLOAD';
+
     const doc = await this.prisma.medicalDocument.create({
       data: {
         userId,
@@ -23,10 +41,15 @@ export class DocumentIngestionService {
         fileUrl: fileData.fileUrl,
         fileType: fileData.fileType,
         fileSize: fileData.fileSize,
-        ingestionStatus: IngestionStatus.PROCESSING,
-        uploadSource: 'USER_UPLOAD',
+        ingestionStatus: isAvatar ? IngestionStatus.PROCESSED : IngestionStatus.PROCESSING,
+        uploadSource: source,
       },
     });
+
+    // Skip AI medical entity extraction if this is a profile picture avatar
+    if (isAvatar) {
+      return this.getDocumentById(userId, doc.id);
+    }
 
     try {
       const { text, items } = await this.aiExtractor.extractEntitiesFromImageOrText({
@@ -72,7 +95,14 @@ export class DocumentIngestionService {
 
   async getUserDocuments(userId: string) {
     return this.prisma.medicalDocument.findMany({
-      where: { userId },
+      where: {
+        userId,
+        uploadSource: { not: 'PROFILE_AVATAR' },
+        NOT: [
+          { fileName: { startsWith: 'avatar_' } },
+          { fileName: { contains: 'avatar' } },
+        ],
+      },
       orderBy: { createdAt: 'desc' },
       include: {
         extractedEntities: true,
