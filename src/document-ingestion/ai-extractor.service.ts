@@ -94,7 +94,7 @@ export class AiExtractorService {
                 content: [
                   {
                     type: 'text',
-                    text: 'You are an expert clinical AI assistant. Analyze this medical report, lab test, prescription, or health document image with absolute 100% precision and accuracy. Extract and output:\n- HOSPITAL/CLINIC:\n- DOCTOR/PHYSICIAN:\n- PATIENT:\n- DATE:\n- FINDINGS & TEST RESULTS:\nBe extremely thorough, capturing all numbers, units, ranges, and clinical notes verbatim without omissions.'
+                    text: 'You are an expert clinical AI assistant. Analyze this medical document image.\nOutput EXACTLY in this format:\n\nHospital/Clinic: <Name or "null" if not available>\nDoctor/Clinician: <Name or "null" if not available>\n\n<Body of the document, well arranged exactly as it is in the original image, capturing all details>'
                   },
                   {
                     type: 'image_url',
@@ -135,83 +135,28 @@ export class AiExtractorService {
   }
 
   private parseMedicalEntities(ocrText: string, fileName: string): ExtractedItem[] {
-    const lines = ocrText
-      .split(/\r?\n/)
-      .map((l) => l.trim())
-      .filter((l) => l.length > 0);
+    const lower = ocrText.toLowerCase();
 
-    let hospitalName: string | null = null;
-    let patientName: string | null = null;
-    let doctorName: string | null = null;
-    let reportDate: string | null = null;
-
-    const findings: string[] = [];
     let primaryRecordType: RecordType = RecordType.CLINICAL_NOTE;
 
-    for (const line of lines) {
-      if (line.length < 2) continue;
-
-      const lower = line.toLowerCase();
-
-      const hospMatch = line.match(/(?:hospital|clinic|center|medical center|lab|laboratory|facility)\s*[:=\-]?\s*([a-z0-9\s]{3,})/i) ||
-                        line.match(/(?:HOSPITAL|CLINIC|FACILITY)\/?[A-Z\s:]+([A-Za-z0-9\s]{3,})/);
-      if (hospMatch && !hospitalName) {
-        hospitalName = hospMatch[1].trim();
-        continue;
-      }
-
-      const patMatch = line.match(/(?:patient|name)\s*[:=\-]?\s*([a-z\s]{3,})/i);
-      if (patMatch && !patientName && !patMatch[1].toLowerCase().includes('report')) {
-        patientName = patMatch[1].trim();
-        continue;
-      }
-
-      const docMatch = line.match(/(?:doctor|physician|dr\.?)\s*[:=\-]?\s*([a-z\s]{3,})/i) ||
-                       line.match(/Dr\.?\s+([A-Za-z\s]+)/);
-      if (docMatch && !doctorName) {
-        doctorName = `Dr. ${docMatch[1].trim().replace(/^dr\.?\s*/i, '')}`;
-        continue;
-      }
-
-      const dateMatch = line.match(/date\s*[:=\-]?\s*([0-9a-zA-Z\/\-\,\s]{4,})/i);
-      if (dateMatch && !reportDate) {
-        reportDate = dateMatch[1].trim();
-        continue;
-      }
-
-      // Determine record category
-      if (/\b(?:bp|blood pressure|heart rate|pulse|temp|spo2)\b/i.test(lower)) {
-        if (primaryRecordType === RecordType.CLINICAL_NOTE) primaryRecordType = RecordType.VITAL_SIGN;
-      } else if (/\b(?:mg|mcg|ml|g|tablet|capsule|syrup|prescription)\b/i.test(lower)) {
-        if (primaryRecordType === RecordType.CLINICAL_NOTE) primaryRecordType = RecordType.MEDICATION;
-      } else if (/\b(?:mg\/dl|g\/dl|mmol\/l|u\/l|result|value|cbc|hemoglobin|cholesterol|glucose|lab)\b/i.test(lower)) {
-        if (primaryRecordType === RecordType.CLINICAL_NOTE) primaryRecordType = RecordType.LAB_TEST;
-      } else if (/\b(?:diagnosis|impression|assessment)\b/i.test(lower)) {
-        if (primaryRecordType === RecordType.CLINICAL_NOTE) primaryRecordType = RecordType.DIAGNOSIS;
-      }
-
-      findings.push(line);
+    // Determine record category
+    if (/\b(?:bp|blood pressure|heart rate|pulse|temp|spo2)\b/i.test(lower)) {
+      primaryRecordType = RecordType.VITAL_SIGN;
+    } else if (/\b(?:mg|mcg|ml|g|tablet|capsule|syrup|prescription)\b/i.test(lower)) {
+      primaryRecordType = RecordType.MEDICATION;
+    } else if (/\b(?:mg\/dl|g\/dl|mmol\/l|u\/l|result|value|cbc|hemoglobin|cholesterol|glucose|lab)\b/i.test(lower)) {
+      primaryRecordType = RecordType.LAB_TEST;
+    } else if (/\b(?:diagnosis|impression|assessment)\b/i.test(lower)) {
+      primaryRecordType = RecordType.DIAGNOSIS;
     }
 
     const cleanTitle = this.formatCleanName(fileName);
-    const descParts: string[] = [];
-
-    if (hospitalName) descParts.push(`Hospital/Facility: ${hospitalName}`);
-    if (doctorName) descParts.push(`Doctor: ${doctorName}`);
-    if (patientName) descParts.push(`Patient: ${patientName}`);
-    if (reportDate) descParts.push(`Date: ${reportDate}`);
-
-    if (findings.length > 0) {
-      descParts.push(`Document Content & Findings:\n` + findings.join('\n'));
-    } else {
-      descParts.push(`Scanned Document: ${fileName}\n\nFull Text:\n${ocrText}`);
-    }
 
     return [
       {
         recordType: primaryRecordType,
         title: cleanTitle,
-        description: descParts.join('\n\n'),
+        description: ocrText.trim(),
         confidenceScore: 0.99,
       },
     ];

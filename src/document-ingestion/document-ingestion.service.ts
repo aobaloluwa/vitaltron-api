@@ -148,7 +148,7 @@ export class DocumentIngestionService {
     }
 
     const desc = dto.description || entity.description || '';
-    const extractedFacility = desc.match(/(?:Hospital|Facility):\s*([^\n|]+)/i)?.[1]?.trim() || null;
+    const extractedFacility = desc.match(/(?:Hospital|Facility|Clinic)(?:\/Clinic)?:\s*([^\n|]+)/i)?.[1]?.trim() || null;
 
     const healthRecord = await this.prisma.healthRecord.create({
       data: {
