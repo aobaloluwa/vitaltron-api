@@ -94,7 +94,7 @@ export class AiExtractorService {
                 content: [
                   {
                     type: 'text',
-                    text: 'You are an expert clinical AI assistant. Analyze this medical document image.\nOutput EXACTLY in this format:\n\nHospital/Clinic: <Name or "null" if not available>\nDoctor/Clinician: <Name or "null" if not available>\n\n<Body of the document, well arranged exactly as it is in the original image, capturing all details>'
+                    text: 'You are an expert clinical AI assistant. Analyze this medical document image.\nOutput EXACTLY in this format:\n\nHospital/Clinic: <Name or "null" if not available>\nDoctor/Clinician: <Name or "null" if not available>\n\n<Body of the document, well arranged exactly as it is in the original image, capturing all details. DO NOT use long continuous lines of hyphens or underscores (like "---------"). Instead, use clean vertical tabular spacing.>'
                   },
                   {
                     type: 'image_url',
