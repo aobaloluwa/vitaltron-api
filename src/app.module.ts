@@ -16,6 +16,7 @@ import { DocumentIngestionModule } from './document-ingestion/document-ingestion
 import { ClinicalBriefModule } from './clinical-brief/clinical-brief.module';
 import { ControlledSharingModule } from './controlled-sharing/controlled-sharing.module';
 import { InteroperabilityModule } from './interoperability/interoperability.module';
+import { NotificationsModule } from './notifications/notifications.module';
 
 @Module({
   imports: [
@@ -52,6 +53,7 @@ import { InteroperabilityModule } from './interoperability/interoperability.modu
     ClinicalBriefModule,
     ControlledSharingModule,
     InteroperabilityModule,
+    NotificationsModule,
   ],
 
   controllers: [AppController, HealthController],
