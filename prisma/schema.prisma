@@ -99,6 +99,21 @@ model User {
   notifications     Notification[]
   pushTokens        PushToken[]
 
+  womensHealthProfile   WomensHealthProfile?
+  menstrualCycles       MenstrualCycle[]
+  periodRecords         PeriodRecord[]
+  dailyCycleLogs        DailyCycleLog[]
+  fertilityProfile      FertilityProfile?
+  pregnancyProfile      PregnancyProfile?
+  postpartumProfile     PostpartumProfile?
+  menopauseProfile      MenopauseProfile?
+  contraceptionProfile  ContraceptionProfile?
+  sexualHealthRecords   SexualHealthRecord[]
+  stiScreeningRecords   StiScreeningRecord[]
+  articleBookmarks      ArticleBookmark[]
+  womensHealthReminders WomensHealthReminder[]
+  womensHealthReports   WomensHealthReport[]
+
   @@map("users")
 }
 
@@ -370,4 +385,464 @@ model AuditLog {
   @@index([targetPatientId])
   @@index([createdAt])
   @@map("audit_logs")
+}
+
+// ==========================================
+// WOMEN'S HEALTH & WELLNESS MODULE ENUMS
+// ==========================================
+
+enum TrackingMode {
+  MENSTRUAL
+  CONCEPTION
+  PREGNANCY
+  POSTPARTUM
+  MENOPAUSE
+}
+
+enum CyclePhase {
+  MENSTRUAL
+  FOLLICULAR
+  OVULATORY
+  LUTAL
+}
+
+enum FlowIntensity {
+  LIGHT
+  MEDIUM
+  HEAVY
+  VERY_HEAVY
+  SPOTTING
+}
+
+enum CervicalMucusType {
+  DRY
+  STICKY
+  CREAMY
+  EGG_WHITE
+  WATERY
+}
+
+enum PregnancyType {
+  SINGLETON
+  TWINS
+  TRIPLETS
+  OTHER
+}
+
+enum DeliveryType {
+  VAGINAL
+  CESAREAN
+  VBAC
+  OTHER
+}
+
+enum ContraceptionType {
+  PILL
+  IUD_HORMONAL
+  IUD_COPPER
+  IMPLANT
+  PATCH
+  RING
+  INJECTION
+  CONDOM
+  OTHER
+}
+
+enum RemindFrequency {
+  DAILY
+  WEEKLY
+  MONTHLY
+  CUSTOM
+}
+
+enum ArticleCategory {
+  MENSTRUATION
+  OVULATION_FERTILITY
+  PREGNANCY
+  POSTPARTUM
+  MENOPAUSE
+  CONTRACEPTION
+  SEXUAL_HEALTH
+  GENERAL_WELLNESS
+}
+
+// ==========================================
+// WOMEN'S HEALTH & WELLNESS MODULE MODELS
+// ==========================================
+
+model WomensHealthProfile {
+  id                    String       @id @default(uuid()) @db.Uuid
+  userId                String       @unique @db.Uuid
+  activeMode            TrackingMode @default(MENSTRUAL)
+  averageCycleLength    Int          @default(28)
+  averagePeriodDuration Int          @default(5)
+  lastPeriodStart       DateTime?
+  estimatedDueDate      DateTime?
+  isHighPrivacy         Boolean      @default(false)
+  createdAt             DateTime     @default(now())
+  updatedAt             DateTime     @updatedAt
+
+  user                  User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("womens_health_profiles")
+}
+
+model MenstrualCycle {
+  id             String         @id @default(uuid()) @db.Uuid
+  patientId      String         @db.Uuid
+  startDate      DateTime
+  endDate        DateTime?
+  cycleLength    Int?
+  periodDuration Int?
+  isIrregular    Boolean        @default(false)
+  notes          String?        @db.Text
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  patient        User           @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  periodRecords  PeriodRecord[]
+
+  @@index([patientId, startDate])
+  @@map("menstrual_cycles")
+}
+
+model PeriodRecord {
+  id         String        @id @default(uuid()) @db.Uuid
+  cycleId    String?       @db.Uuid
+  patientId  String        @db.Uuid
+  date       DateTime
+  flow       FlowIntensity @default(MEDIUM)
+  isSpotting Boolean       @default(false)
+  notes      String?       @db.Text
+  createdAt  DateTime      @default(now())
+
+  patient    User            @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  cycle      MenstrualCycle? @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+
+  @@index([patientId, date])
+  @@map("period_records")
+}
+
+model DailyCycleLog {
+  id                  String             @id @default(uuid()) @db.Uuid
+  patientId           String             @db.Uuid
+  date                DateTime
+  symptoms            Json?
+  mood                String?            @db.VarChar(100)
+  cervicalMucus       CervicalMucusType?
+  bbt                 Float?
+  sexualActivity      Boolean?           @default(false)
+  ovulationTestResult String?            @db.VarChar(50)
+  pregnancyTestResult String?            @db.VarChar(50)
+  notes               String?            @db.Text
+  createdAt           DateTime           @default(now())
+  updatedAt           DateTime           @updatedAt
+
+  patient             User               @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@unique([patientId, date])
+  @@index([patientId, date])
+  @@map("daily_cycle_logs")
+}
+
+model FertilityProfile {
+  id                String    @id @default(uuid()) @db.Uuid
+  patientId         String    @unique @db.Uuid
+  goal              String    @default("CONCEPTION") @db.VarChar(100)
+  startedTryingDate DateTime?
+  notes             String?   @db.Text
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  patient           User      @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@map("fertility_profiles")
+}
+
+model PregnancyProfile {
+  id                  String               @id @default(uuid()) @db.Uuid
+  patientId           String               @unique @db.Uuid
+  lmpDate             DateTime?
+  confirmedDueDate    DateTime?
+  conceptionDate      DateTime?
+  pregnancyType       PregnancyType        @default(SINGLETON)
+  babiesCount         Int                  @default(1)
+  healthcareProvider  String?              @db.VarChar(150)
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+
+  patient             User                 @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  milestones          PregnancyMilestone[]
+  weights             PregnancyWeight[]
+  kickSessions        KickSession[]
+  contractionSessions ContractionSession[]
+  journals            PregnancyJournal[]
+
+  @@map("pregnancy_profiles")
+}
+
+model PregnancyMilestone {
+  id            String           @id @default(uuid()) @db.Uuid
+  pregnancyId   String           @db.Uuid
+  title         String           @db.VarChar(200)
+  description   String?          @db.Text
+  milestoneDate DateTime
+  isCompleted   Boolean          @default(false)
+  category      String?          @db.VarChar(50)
+  createdAt     DateTime         @default(now())
+
+  pregnancy     PregnancyProfile @relation(fields: [pregnancyId], references: [id], onDelete: Cascade)
+
+  @@index([pregnancyId])
+  @@map("pregnancy_milestones")
+}
+
+model PregnancyWeight {
+  id          String           @id @default(uuid()) @db.Uuid
+  pregnancyId String           @db.Uuid
+  date        DateTime
+  weightKg    Float
+  notes       String?          @db.Text
+  createdAt   DateTime         @default(now())
+
+  pregnancy   PregnancyProfile @relation(fields: [pregnancyId], references: [id], onDelete: Cascade)
+
+  @@index([pregnancyId, date])
+  @@map("pregnancy_weights")
+}
+
+model KickSession {
+  id          String           @id @default(uuid()) @db.Uuid
+  pregnancyId String           @db.Uuid
+  startTime   DateTime
+  endTime     DateTime?
+  kickCount   Int              @default(0)
+  notes       String?          @db.Text
+  createdAt   DateTime         @default(now())
+
+  pregnancy   PregnancyProfile @relation(fields: [pregnancyId], references: [id], onDelete: Cascade)
+
+  @@index([pregnancyId, startTime])
+  @@map("kick_sessions")
+}
+
+model ContractionSession {
+  id              String           @id @default(uuid()) @db.Uuid
+  pregnancyId     String           @db.Uuid
+  startTime       DateTime
+  endTime         DateTime?
+  durationSeconds Int?
+  intervalMinutes Float?
+  severity        Int?
+  notes           String?          @db.Text
+  createdAt       DateTime         @default(now())
+
+  pregnancy       PregnancyProfile @relation(fields: [pregnancyId], references: [id], onDelete: Cascade)
+
+  @@index([pregnancyId, startTime])
+  @@map("contraction_sessions")
+}
+
+model PregnancyJournal {
+  id          String           @id @default(uuid()) @db.Uuid
+  pregnancyId String           @db.Uuid
+  title       String           @db.VarChar(200)
+  content     String           @db.Text
+  weekNumber  Int?
+  mood        String?          @db.VarChar(50)
+  photoUrl    String?          @db.Text
+  isMemory    Boolean          @default(false)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  pregnancy   PregnancyProfile @relation(fields: [pregnancyId], references: [id], onDelete: Cascade)
+
+  @@index([pregnancyId, createdAt])
+  @@map("pregnancy_journals")
+}
+
+model PostpartumProfile {
+  id            String                @id @default(uuid()) @db.Uuid
+  patientId     String                @unique @db.Uuid
+  deliveryDate  DateTime
+  deliveryType  DeliveryType          @default(VAGINAL)
+  recoveryNotes String?               @db.Text
+  moodRating    Int?
+  lochiaStatus  String?               @db.VarChar(100)
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+
+  patient       User                  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  breastfeedings BreastfeedingRecord[]
+
+  @@map("postpartum_profiles")
+}
+
+model BreastfeedingRecord {
+  id                String            @id @default(uuid()) @db.Uuid
+  postpartumId      String            @db.Uuid
+  startTime         DateTime
+  breastSide        String?           @db.VarChar(20)
+  durationMinutes   Int?
+  expressedAmountMl Float?
+  notes             String?           @db.Text
+  createdAt         DateTime          @default(now())
+
+  postpartum        PostpartumProfile @relation(fields: [postpartumId], references: [id], onDelete: Cascade)
+
+  @@index([postpartumId, startTime])
+  @@map("breastfeeding_records")
+}
+
+model MenopauseProfile {
+  id        String                 @id @default(uuid()) @db.Uuid
+  patientId String                 @unique @db.Uuid
+  stage     String?                @db.VarChar(50)
+  notes     String?                @db.Text
+  createdAt DateTime               @default(now())
+  updatedAt DateTime               @updatedAt
+
+  patient   User                   @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  symptoms  MenopauseSymptomLog[]
+
+  @@map("menopause_profiles")
+}
+
+model MenopauseSymptomLog {
+  id               String           @id @default(uuid()) @db.Uuid
+  menopauseId      String           @db.Uuid
+  date             DateTime
+  hotFlashSeverity Int?
+  nightSweats      Boolean?         @default(false)
+  sleepQuality     Int?
+  brainFogRating   Int?
+  moodChanges      String?          @db.VarChar(100)
+  triggers         String?          @db.Text
+  notes            String?          @db.Text
+  createdAt        DateTime         @default(now())
+
+  menopause        MenopauseProfile @relation(fields: [menopauseId], references: [id], onDelete: Cascade)
+
+  @@index([menopauseId, date])
+  @@map("menopause_symptom_logs")
+}
+
+model ContraceptionProfile {
+  id              String            @id @default(uuid()) @db.Uuid
+  patientId       String            @unique @db.Uuid
+  type            ContraceptionType @default(PILL)
+  brandName       String?           @db.VarChar(100)
+  startDate       DateTime
+  replacementDate DateTime?
+  reminderTime    String?           @db.VarChar(20)
+  notes           String?           @db.Text
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  patient         User              @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@map("contraception_profiles")
+}
+
+model SexualHealthRecord {
+  id             String   @id @default(uuid()) @db.Uuid
+  patientId      String   @db.Uuid
+  date           DateTime
+  activityType   String?  @db.VarChar(100)
+  protectionUsed Boolean? @default(true)
+  notes          String?  @db.Text
+  createdAt      DateTime @default(now())
+
+  patient        User     @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@index([patientId, date])
+  @@map("sexual_health_records")
+}
+
+model StiScreeningRecord {
+  id           String    @id @default(uuid()) @db.Uuid
+  patientId    String    @db.Uuid
+  testDate     DateTime
+  testType     String    @db.VarChar(150)
+  result       String?   @db.VarChar(100)
+  provider     String?   @db.VarChar(150)
+  followUpDate DateTime?
+  notes        String?   @db.Text
+  createdAt    DateTime  @default(now())
+
+  patient      User      @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@index([patientId, testDate])
+  @@map("sti_screening_records")
+}
+
+model WomensHealthArticle {
+  id              String          @id @default(uuid()) @db.Uuid
+  slug            String          @unique @db.VarChar(150)
+  title           String          @db.VarChar(255)
+  summary         String          @db.Text
+  content         String          @db.Text
+  category        ArticleCategory @default(GENERAL_WELLNESS)
+  readTimeMinutes Int             @default(5)
+  authorName      String          @db.VarChar(100)
+  reviewerName    String          @db.VarChar(100)
+  reviewerTitle   String          @db.VarChar(150)
+  lastReviewedAt  DateTime        @default(now())
+  isPublished     Boolean         @default(true)
+  tags            String[]        @default([])
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  bookmarks       ArticleBookmark[]
+
+  @@index([category])
+  @@map("womens_health_articles")
+}
+
+model ArticleBookmark {
+  id        String              @id @default(uuid()) @db.Uuid
+  userId    String              @db.Uuid
+  articleId String              @db.Uuid
+  createdAt DateTime            @default(now())
+
+  user      User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  article   WomensHealthArticle @relation(fields: [articleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, articleId])
+  @@map("article_bookmarks")
+}
+
+model WomensHealthReminder {
+  id           String          @id @default(uuid()) @db.Uuid
+  userId       String          @db.Uuid
+  title        String          @db.VarChar(200)
+  category     String          @db.VarChar(50)
+  reminderTime String          @db.VarChar(20)
+  frequency    RemindFrequency @default(DAILY)
+  isEnabled    Boolean         @default(true)
+  notes        String?         @db.Text
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  user         User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("womens_health_reminders")
+}
+
+model WomensHealthReport {
+  id          String   @id @default(uuid()) @db.Uuid
+  userId      String   @db.Uuid
+  title       String   @db.VarChar(200)
+  reportType  String   @db.VarChar(50)
+  startDate   DateTime
+  endDate     DateTime
+  summaryData Json
+  pdfUrl      String?  @db.Text
+  createdAt   DateTime @default(now())
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("womens_health_reports")
 }

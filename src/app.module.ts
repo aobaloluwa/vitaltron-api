@@ -17,6 +17,7 @@ import { ClinicalBriefModule } from './clinical-brief/clinical-brief.module';
 import { ControlledSharingModule } from './controlled-sharing/controlled-sharing.module';
 import { InteroperabilityModule } from './interoperability/interoperability.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { WomensHealthModule } from './womens-health/womens-health.module';
 
 @Module({
   imports: [
@@ -54,6 +55,7 @@ import { NotificationsModule } from './notifications/notifications.module';
     ControlledSharingModule,
     InteroperabilityModule,
     NotificationsModule,
+    WomensHealthModule,
   ],
 
   controllers: [AppController, HealthController],
