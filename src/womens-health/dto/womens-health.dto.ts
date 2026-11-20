@@ -27,6 +27,14 @@ export class UpdateProfileDto {
   activeMode?: TrackingMode;
 
   @IsOptional()
+  @IsBoolean()
+  isOnboarded?: boolean;
+
+  @IsOptional()
+  @IsString()
+  declaredSex?: string;
+
+  @IsOptional()
   @IsInt()
   @Min(20)
   @Max(45)

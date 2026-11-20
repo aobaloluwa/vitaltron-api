@@ -63,6 +63,8 @@ export class WomensHealthService {
       where: { id: profile.id },
       data: {
         ...(dto.activeMode && { activeMode: dto.activeMode }),
+        ...(dto.isOnboarded !== undefined && { isOnboarded: dto.isOnboarded }),
+        ...(dto.declaredSex && { declaredSex: dto.declaredSex }),
         ...(dto.averageCycleLength && { averageCycleLength: dto.averageCycleLength }),
         ...(dto.averagePeriodDuration && { averagePeriodDuration: dto.averagePeriodDuration }),
         ...(dto.lastPeriodStart && { lastPeriodStart: new Date(dto.lastPeriodStart) }),
@@ -75,7 +77,7 @@ export class WomensHealthService {
       action: 'UPDATE_WOMENS_HEALTH_PROFILE',
       actorUserId: userId,
       targetPatientId: userId,
-      details: { activeMode: updated.activeMode },
+      details: { activeMode: updated.activeMode, declaredSex: updated.declaredSex },
     });
 
     return updated;
@@ -141,6 +143,8 @@ export class WomensHealthService {
         name: user?.displayName || user?.email?.split('@')[0] || 'Friend',
       },
       activeMode: profile.activeMode,
+      isOnboarded: profile.isOnboarded,
+      declaredSex: profile.declaredSex,
       cycleMetrics,
       pregnancyMetrics: pregMetrics,
       menopauseSummary: menopauseProfile,
