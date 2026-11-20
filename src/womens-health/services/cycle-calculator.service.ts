@@ -104,19 +104,23 @@ export class CycleCalculatorService {
     const fertileEnd = new Date(nextOvulationDate);
     fertileEnd.setDate(nextOvulationDate.getDate() + 1);
 
+    const hasLoggedPeriod = Boolean(lastPeriodStart || historicalCycles.length > 0);
+
     return {
-      currentCycleDay,
-      currentPhase,
-      phaseDisplayName,
-      phaseDescription,
-      estimatedNextPeriod: nextPeriodDate.toISOString().split('T')[0],
-      estimatedOvulation: nextOvulationDate.toISOString().split('T')[0],
-      fertileWindowStart: fertileStart.toISOString().split('T')[0],
-      fertileWindowEnd: fertileEnd.toISOString().split('T')[0],
+      currentCycleDay: hasLoggedPeriod ? currentCycleDay : 0,
+      currentPhase: hasLoggedPeriod ? currentPhase : CyclePhase.FOLLICULAR,
+      phaseDisplayName: hasLoggedPeriod ? phaseDisplayName : 'Follicular Phase',
+      phaseDescription: hasLoggedPeriod
+        ? phaseDescription
+        : 'Log your period start date to unlock dynamic phase calculations and cycle predictions.',
+      estimatedNextPeriod: hasLoggedPeriod ? nextPeriodDate.toISOString().split('T')[0] : '',
+      estimatedOvulation: hasLoggedPeriod ? nextOvulationDate.toISOString().split('T')[0] : '',
+      fertileWindowStart: hasLoggedPeriod ? fertileStart.toISOString().split('T')[0] : '',
+      fertileWindowEnd: hasLoggedPeriod ? fertileEnd.toISOString().split('T')[0] : '',
       averageCycleLength: avgCycle,
       averagePeriodDuration: avgPeriod,
       cycleVariabilityDays: variability,
-      isDataSufficient: validLengths.length >= 3,
+      isDataSufficient: hasLoggedPeriod,
       disclaimer:
         'Calculations are statistical estimates based on user logs and cannot guarantee contraception or exact ovulation timing.',
     };
