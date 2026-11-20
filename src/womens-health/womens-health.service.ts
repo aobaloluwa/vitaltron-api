@@ -47,9 +47,18 @@ export class WomensHealthService {
         data: {
           userId,
           activeMode: TrackingMode.MENSTRUAL,
+          isOnboarded: false,
+          declaredSex: null,
           averageCycleLength: 28,
           averagePeriodDuration: 5,
         },
+      });
+    }
+
+    if (!profile.declaredSex && profile.isOnboarded) {
+      profile = await this.prisma.womensHealthProfile.update({
+        where: { id: profile.id },
+        data: { isOnboarded: false },
       });
     }
 
