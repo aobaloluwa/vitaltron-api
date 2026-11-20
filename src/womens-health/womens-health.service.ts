@@ -187,6 +187,9 @@ export class WomensHealthService {
         periodDuration = Math.max(1, Math.round(diffMs / (1000 * 60 * 60 * 24)) + 1);
       }
 
+      // Ensure user profile exists before attaching cycle
+      await this.getProfile(userId);
+
       // Create cycle record
       const cycle = await this.prisma.menstrualCycle.create({
         data: {
@@ -211,12 +214,19 @@ export class WomensHealthService {
       });
 
       // Update profile last period start date
-      await this.updateProfile(userId, { lastPeriodStart: dto.startDate });
+      try {
+        await this.updateProfile(userId, { lastPeriodStart: dto.startDate });
+      } catch (err) {
+        this.logger.warn(`Could not update lastPeriodStart for user ${userId}`, err);
+      }
 
       return { cycle, periodRecord };
-    } catch (error) {
+    } catch (error: any) {
       this.logger.error(`Failed to create period entry for user ${userId}:`, error);
-      throw error;
+      if (error instanceof BadRequestException || error instanceof NotFoundException) {
+        throw error;
+      }
+      throw new BadRequestException(error?.message || 'Failed to save period record');
     }
   }
 
