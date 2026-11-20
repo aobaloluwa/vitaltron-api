@@ -55,13 +55,6 @@ export class WomensHealthService {
       });
     }
 
-    if (!profile.declaredSex && profile.isOnboarded) {
-      profile = await this.prisma.womensHealthProfile.update({
-        where: { id: profile.id },
-        data: { isOnboarded: false },
-      });
-    }
-
     return profile;
   }
 
@@ -73,7 +66,7 @@ export class WomensHealthService {
       data: {
         ...(dto.activeMode && { activeMode: dto.activeMode }),
         ...(dto.isOnboarded !== undefined && { isOnboarded: dto.isOnboarded }),
-        ...(dto.declaredSex && { declaredSex: dto.declaredSex }),
+        ...(dto.declaredSex !== undefined && { declaredSex: dto.declaredSex }),
         ...(dto.averageCycleLength && { averageCycleLength: dto.averageCycleLength }),
         ...(dto.averagePeriodDuration && { averagePeriodDuration: dto.averagePeriodDuration }),
         ...(dto.lastPeriodStart && { lastPeriodStart: new Date(dto.lastPeriodStart) }),
