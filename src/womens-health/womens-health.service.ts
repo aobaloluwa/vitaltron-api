@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { CycleCalculatorService } from './services/cycle-calculator.service';
@@ -25,6 +25,8 @@ import { TrackingMode, ArticleCategory } from '../../generated/prisma/enums';
 
 @Injectable()
 export class WomensHealthService {
+  private readonly logger = new Logger(WomensHealthService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditService: AuditService,
@@ -168,42 +170,54 @@ export class WomensHealthService {
   }
 
   async createPeriod(userId: string, dto: CreatePeriodDto) {
-    const startDate = new Date(dto.startDate);
-    const endDate = dto.endDate ? new Date(dto.endDate) : null;
+    try {
+      const startDate = new Date(dto.startDate);
+      if (isNaN(startDate.getTime())) {
+        throw new BadRequestException('Invalid start date string format');
+      }
 
-    let periodDuration = 5;
-    if (endDate) {
-      const diffMs = endDate.getTime() - startDate.getTime();
-      periodDuration = Math.max(1, Math.round(diffMs / (1000 * 60 * 60 * 24)) + 1);
+      const endDate = dto.endDate && dto.endDate.trim() ? new Date(dto.endDate) : null;
+      if (endDate && isNaN(endDate.getTime())) {
+        throw new BadRequestException('Invalid end date string format');
+      }
+
+      let periodDuration = 5;
+      if (endDate) {
+        const diffMs = endDate.getTime() - startDate.getTime();
+        periodDuration = Math.max(1, Math.round(diffMs / (1000 * 60 * 60 * 24)) + 1);
+      }
+
+      // Create cycle record
+      const cycle = await this.prisma.menstrualCycle.create({
+        data: {
+          patientId: userId,
+          startDate,
+          endDate,
+          periodDuration,
+          notes: dto.notes || null,
+        },
+      });
+
+      // Create initial period record
+      const periodRecord = await this.prisma.periodRecord.create({
+        data: {
+          cycleId: cycle.id,
+          patientId: userId,
+          date: startDate,
+          flow: dto.flow || 'MEDIUM',
+          isSpotting: dto.isSpotting || false,
+          notes: dto.notes || null,
+        },
+      });
+
+      // Update profile last period start date
+      await this.updateProfile(userId, { lastPeriodStart: dto.startDate });
+
+      return { cycle, periodRecord };
+    } catch (error) {
+      this.logger.error(`Failed to create period entry for user ${userId}:`, error);
+      throw error;
     }
-
-    // Create cycle record
-    const cycle = await this.prisma.menstrualCycle.create({
-      data: {
-        patientId: userId,
-        startDate,
-        endDate,
-        periodDuration,
-        notes: dto.notes,
-      },
-    });
-
-    // Create initial period record
-    const periodRecord = await this.prisma.periodRecord.create({
-      data: {
-        cycleId: cycle.id,
-        patientId: userId,
-        date: startDate,
-        flow: dto.flow || 'MEDIUM',
-        isSpotting: dto.isSpotting || false,
-        notes: dto.notes,
-      },
-    });
-
-    // Update profile last period start date
-    await this.updateProfile(userId, { lastPeriodStart: dto.startDate });
-
-    return { cycle, periodRecord };
   }
 
   async getCalendar(userId: string, yearMonth?: string) {
