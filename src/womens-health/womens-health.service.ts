@@ -576,12 +576,17 @@ export class WomensHealthService {
   }
 
   async logKickSession(userId: string, dto: LogKickSessionDto) {
-    const pregProfile = await this.prisma.pregnancyProfile.findUnique({
+    let pregProfile = await this.prisma.pregnancyProfile.findUnique({
       where: { patientId: userId },
     });
 
     if (!pregProfile) {
-      throw new BadRequestException('Pregnancy profile must be initialized before logging kick sessions.');
+      pregProfile = await this.prisma.pregnancyProfile.create({
+        data: {
+          patientId: userId,
+          lmpDate: new Date(),
+        },
+      });
     }
 
     return this.prisma.kickSession.create({
@@ -596,12 +601,17 @@ export class WomensHealthService {
   }
 
   async logContractionSession(userId: string, dto: LogContractionSessionDto) {
-    const pregProfile = await this.prisma.pregnancyProfile.findUnique({
+    let pregProfile = await this.prisma.pregnancyProfile.findUnique({
       where: { patientId: userId },
     });
 
     if (!pregProfile) {
-      throw new BadRequestException('Pregnancy profile must be initialized before logging contractions.');
+      pregProfile = await this.prisma.pregnancyProfile.create({
+        data: {
+          patientId: userId,
+          lmpDate: new Date(),
+        },
+      });
     }
 
     return this.prisma.contractionSession.create({
