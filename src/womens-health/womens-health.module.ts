@@ -6,9 +6,10 @@ import { PregnancyCalculatorService } from './services/pregnancy-calculator.serv
 import { WomensHealthAiService } from './services/womens-health-ai.service';
 import { PrismaModule } from '../prisma/prisma.module';
 import { AuditModule } from '../audit/audit.module';
+import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
-  imports: [PrismaModule, AuditModule],
+  imports: [PrismaModule, AuditModule, NotificationsModule],
   controllers: [WomensHealthController],
   providers: [
     WomensHealthService,

@@ -4,6 +4,7 @@ import { AuditService } from '../audit/audit.service';
 import { CycleCalculatorService } from './services/cycle-calculator.service';
 import { PregnancyCalculatorService } from './services/pregnancy-calculator.service';
 import { WomensHealthAiService } from './services/womens-health-ai.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import {
   UpdateProfileDto,
   CreatePeriodDto,
@@ -33,6 +34,7 @@ export class WomensHealthService {
     private readonly cycleCalculator: CycleCalculatorService,
     private readonly pregnancyCalculator: PregnancyCalculatorService,
     private readonly aiService: WomensHealthAiService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   // ==========================================
@@ -1520,7 +1522,7 @@ Following placental delivery, maternal serum levels of estrogen and progesterone
   }
 
   async createReminder(userId: string, dto: CreateReminderDto) {
-    return this.prisma.womensHealthReminder.create({
+    const reminder = await this.prisma.womensHealthReminder.create({
       data: {
         userId,
         title: dto.title,
@@ -1531,6 +1533,19 @@ Following placental delivery, maternal serum levels of estrogen and progesterone
         notes: dto.notes,
       },
     });
+
+    try {
+      await this.notificationsService.createNotification(
+        userId,
+        `🔔 Reminder Set: ${dto.title}`,
+        `Your ${dto.category.toLowerCase().replace('_', ' ')} reminder is scheduled for ${dto.reminderTime} (${dto.frequency || 'DAILY'}).`,
+        'REMINDER',
+      );
+    } catch (err) {
+      this.logger.warn(`Could not dispatch reminder notification for user ${userId}`, err);
+    }
+
+    return reminder;
   }
 
   async deleteReminder(userId: string, id: string) {
