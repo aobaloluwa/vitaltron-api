@@ -804,7 +804,89 @@ export class WomensHealthService {
       },
     });
 
-    return profile;
+    if (!profile) {
+      profile = await this.prisma.menopauseProfile.create({
+        data: {
+          patientId: userId,
+          stage: 'PERIMENOPAUSE',
+        },
+        include: {
+          symptoms: { orderBy: { date: 'desc' }, take: 30 },
+        },
+      });
+    }
+
+    const now = new Date();
+    const todayYear = now.getFullYear();
+    const todayMonth = now.getMonth();
+    const todayDay = now.getDate();
+
+    let todayLog = profile.symptoms.find((l) => {
+      const d = new Date(l.date);
+      return (
+        d.getFullYear() === todayYear &&
+        d.getMonth() === todayMonth &&
+        d.getDate() === todayDay
+      );
+    });
+
+    if (!todayLog && profile.symptoms.length > 0) {
+      const mostRecent = profile.symptoms[0];
+      const recentDate = new Date(mostRecent.date);
+      const diffHours = (now.getTime() - recentDate.getTime()) / (1000 * 60 * 60);
+      if (diffHours <= 24) {
+        todayLog = mostRecent;
+      }
+    }
+
+    const menopauseInsights = this.generateMenopauseInsights(
+      todayLog,
+      profile.stage || 'PERIMENOPAUSE',
+      profile.symptoms,
+    );
+
+    return {
+      profile,
+      todayLog: todayLog || null,
+      menopauseInsights,
+    };
+  }
+
+  private generateMenopauseInsights(
+    todayLog: any | null,
+    stage: string,
+    recentLogs: any[],
+  ) {
+    const todayLogged = Boolean(todayLog);
+    const hotFlash = todayLog?.hotFlashSeverity ?? 0;
+    const nightSweats = Boolean(todayLog?.nightSweats);
+    const sleep = todayLog?.sleepQuality ?? 7;
+    const brainFog = todayLog?.brainFogRating ?? 0;
+
+    let personalizedTip = '';
+    let statusTitle = stage || 'Perimenopause Management';
+
+    if (hotFlash >= 5 || nightSweats) {
+      personalizedTip = `🔥 Vasomotor Symptom Support: Hot flash severity (${hotFlash}/10) or night sweats logged today. Layered breathable clothing, cooling bedtime gel pads, and avoiding evening caffeine/spicy foods can help minimize vasomotor spikes.`;
+    } else if (sleep <= 5) {
+      personalizedTip = `😴 Sleep Hygiene Focus: Sleep score is low (${sleep}/10). Hormonal fluctuations often disrupt REM sleep. Maintaining a cool bedroom (18°C/65°F), magnesium supplementation, and limiting screen light before bed support deep rest.`;
+    } else if (brainFog >= 5) {
+      personalizedTip = `🧠 Cognitive Wellness: Brain fog rating (${brainFog}/10) logged today. Estrogen shifts temporarily affect short-term memory processing. Aerobic exercise and omega-3 fatty acids help preserve cognitive sharpness.`;
+    } else if (todayLogged) {
+      personalizedTip = `✨ Menopause Symptom Balance: Today's symptom ratings are within a manageable range. Consistent daily tracking helps identify triggers and evaluate HRT/supplement effectiveness with your gynecologist.`;
+    } else {
+      personalizedTip = `📊 Log your hot flash severity, night sweats, sleep quality, and brain fog ratings below to receive real-time personalized hormonal transition insights.`;
+    }
+
+    return {
+      todayLogged,
+      todayHotFlash: hotFlash,
+      todayNightSweats: nightSweats,
+      todaySleepQuality: sleep,
+      todayBrainFog: brainFog,
+      statusTitle,
+      personalizedTip,
+    };
   }
 
   async logMenopauseSymptom(userId: string, dto: LogMenopauseSymptomDto) {
@@ -821,10 +903,46 @@ export class WomensHealthService {
       });
     }
 
+    const logDate = dto.date ? new Date(dto.date) : new Date();
+
+    const existingLogs = await this.prisma.menopauseSymptomLog.findMany({
+      where: { menopauseId: profile.id },
+      orderBy: { date: 'desc' },
+      take: 10,
+    });
+
+    const targetYear = logDate.getFullYear();
+    const targetMonth = logDate.getMonth();
+    const targetDay = logDate.getDate();
+
+    const existingToday = existingLogs.find((l) => {
+      const d = new Date(l.date);
+      return (
+        d.getFullYear() === targetYear &&
+        d.getMonth() === targetMonth &&
+        d.getDate() === targetDay
+      );
+    });
+
+    if (existingToday) {
+      return this.prisma.menopauseSymptomLog.update({
+        where: { id: existingToday.id },
+        data: {
+          hotFlashSeverity: dto.hotFlashSeverity,
+          nightSweats: dto.nightSweats || false,
+          sleepQuality: dto.sleepQuality,
+          brainFogRating: dto.brainFogRating,
+          moodChanges: dto.moodChanges,
+          triggers: dto.triggers,
+          notes: dto.notes,
+        },
+      });
+    }
+
     return this.prisma.menopauseSymptomLog.create({
       data: {
         menopauseId: profile.id,
-        date: new Date(dto.date),
+        date: logDate,
         hotFlashSeverity: dto.hotFlashSeverity,
         nightSweats: dto.nightSweats || false,
         sleepQuality: dto.sleepQuality,
