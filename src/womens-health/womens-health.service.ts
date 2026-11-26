@@ -674,7 +674,71 @@ export class WomensHealthService {
       },
     });
 
-    return profile;
+    const deliveryDate = profile?.deliveryDate ? new Date(profile.deliveryDate) : new Date();
+    const diffMs = new Date().getTime() - deliveryDate.getTime();
+    const daysPostpartum = Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
+    const weeksPostpartum = Math.floor(daysPostpartum / 7);
+
+    const postpartumInsights = this.generatePostpartumInsights(weeksPostpartum, daysPostpartum);
+
+    return {
+      profile,
+      daysPostpartum,
+      weeksPostpartum,
+      postpartumInsights,
+    };
+  }
+
+  private generatePostpartumInsights(weeks: number, days: number) {
+    if (weeks <= 2) {
+      return {
+        weeksPostpartum: weeks,
+        daysPostpartum: days,
+        milestoneTitle: 'Acute Healing & Initial Recovery (Weeks 1–2)',
+        keyCareAdvice:
+          'Weeks 1–2 Focus: Prioritize maximum physical rest, perineal/incisional wound care, pelvic floor relaxation, and frequent newborn nursing or formula feeds.',
+        recommendedActions: [
+          'Rest in bed as much as possible whenever baby sleeps',
+          'Hydrate with 3+ liters of water daily for lactation & tissue repair',
+          'Monitor lochia flow (normal transition from dark red to pinkish/white)',
+        ],
+        safetyFlags: [
+          'Alert your doctor immediately if passing large blood clots (egg-sized), running a fever (>38°C), or experiencing severe postpartum depression symptoms.',
+        ],
+      };
+    } else if (weeks <= 5) {
+      return {
+        weeksPostpartum: weeks,
+        daysPostpartum: days,
+        milestoneTitle: 'Transitional Healing (Weeks 3–5)',
+        keyCareAdvice:
+          'Weeks 3–5 Focus: Uterine involution is nearing completion. Gentle short walks and pelvic floor kegel breathing can be gradually resumed as comfort allows.',
+        recommendedActions: [
+          'Maintain high-protein nutrition & continue taking prenatal/postpartum vitamins',
+          'Schedule your upcoming 6-week postpartum clinical checkup',
+          'Express emotional needs and track mood shifts with your support system',
+        ],
+        safetyFlags: [
+          'Contact your OB-GYN or midwife if persistent pelvic pain, wound discharge/pus, or severe mood swings occur.',
+        ],
+      };
+    } else {
+      return {
+        weeksPostpartum: weeks,
+        daysPostpartum: days,
+        milestoneTitle: '6-Week Clinical Clearance Milestone (Week 6+)',
+        keyCareAdvice:
+          'Week 6+ Focus: Time for your comprehensive 6-week postpartum OB-GYN physical examination for pelvic floor clearance, mood screening, and contraception planning.',
+        recommendedActions: [
+          'Attend 6-week OB-GYN postpartum physical evaluation & Pap/pelvic check',
+          'Discuss breastfeeding-safe contraception options with your provider',
+          'Gradually resume light exercise as cleared by your clinician',
+        ],
+        safetyFlags: [
+          'Seek professional support if experiencing persistent anxiety, intrusive thoughts, or pain during intimacy.',
+        ],
+      };
+    }
   }
 
   async createPostpartum(userId: string, dto: CreatePostpartumDto) {
