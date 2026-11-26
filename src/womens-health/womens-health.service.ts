@@ -129,12 +129,26 @@ export class WomensHealthService {
       },
     });
 
-    // Recent activity timeline
+    // Recent activity timeline & symptom logs from past 14 days
     const recentLogs = await this.prisma.dailyCycleLog.findMany({
       where: { patientId: userId },
       orderBy: { date: 'desc' },
-      take: 5,
+      take: 14,
     });
+
+    const todayStr = new Date().toISOString().split('T')[0];
+    const todayLog =
+      recentLogs.find((l) => {
+        const dStr = new Date(l.date).toISOString().split('T')[0];
+        return dStr === todayStr;
+      }) || null;
+
+    const symptomInsights = this.generateSymptomInsights(
+      todayLog,
+      recentLogs,
+      cycleMetrics?.phaseDisplayName || 'Menstrual Cycle',
+      profile.activeMode,
+    );
 
     // Reminders
     const reminders = await this.prisma.womensHealthReminder.findMany({
@@ -152,8 +166,67 @@ export class WomensHealthService {
       cycleMetrics,
       pregnancyMetrics: pregMetrics,
       menopauseSummary: menopauseProfile,
+      todayLog,
+      symptomInsights,
       recentLogs,
       upcomingReminders: reminders,
+    };
+  }
+
+  private generateSymptomInsights(
+    todayLog: any | null,
+    recentLogs: any[],
+    phaseName: string,
+    activeMode: string,
+  ) {
+    const todayLogged = Boolean(todayLog);
+    const todayMood = todayLog?.mood || null;
+
+    let todaySymptoms: string[] = [];
+    if (todayLog?.symptoms && typeof todayLog.symptoms === 'object') {
+      todaySymptoms = Object.keys(todayLog.symptoms);
+    }
+
+    const symptomCounts: Record<string, number> = {};
+    for (const log of recentLogs) {
+      if (log.symptoms && typeof log.symptoms === 'object') {
+        for (const symKey of Object.keys(log.symptoms)) {
+          symptomCounts[symKey] = (symptomCounts[symKey] || 0) + 1;
+        }
+      }
+    }
+
+    const topRecentSymptoms = Object.entries(symptomCounts)
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 5);
+
+    let personalizedTip = '';
+
+    if (todaySymptoms.length > 0) {
+      const symList = todaySymptoms.join(', ');
+      if (todaySymptoms.includes('Cramps') || todaySymptoms.includes('Pelvic Pain')) {
+        personalizedTip = `You've logged ${symList} during your ${phaseName}. Applying a warm heat pad, staying hydrated, and gentle pelvic stretches can help relieve uterine contractions.`;
+      } else if (todaySymptoms.includes('Headache') || todaySymptoms.includes('Bloating')) {
+        personalizedTip = `You logged ${symList} today. Hydrating with electrolytes and reducing sodium intake can help alleviate fluid retention and tension.`;
+      } else if (todaySymptoms.includes('Fatigue') || todaySymptoms.includes('Back Pain')) {
+        personalizedTip = `Logging ${symList} today indicates higher physiological strain during your ${phaseName}. Prioritize 7-8 hours of sleep and gentle relaxation.`;
+      } else {
+        personalizedTip = `Logged symptoms today: ${symList}. Tracked consistently, these entries help your clinician tailor personalized care for your ${phaseName}.`;
+      }
+    } else if (todayMood) {
+      personalizedTip = `Today's Mood: ${todayMood}. Mood fluctuations naturally correlate with shifting estrogen and progesterone levels across your ${phaseName}.`;
+    } else {
+      personalizedTip = `No symptoms logged today. Logging daily symptoms and mood helps predict cycle patterns, PMS trends, and ovulation signals.`;
+    }
+
+    return {
+      todayLogged,
+      todayMood,
+      todaySymptoms,
+      todayNotes: todayLog?.notes || null,
+      topRecentSymptoms,
+      personalizedTip,
     };
   }
 
