@@ -1071,7 +1071,49 @@ export class WomensHealthService {
       orderBy: { testDate: 'desc' },
     });
 
-    return { logs, screenings };
+    const sexualHealthInsights = this.generateSexualHealthInsights(screenings, logs);
+
+    return { logs, screenings, sexualHealthInsights };
+  }
+
+  private generateSexualHealthInsights(screenings: any[], logs: any[]) {
+    const mostRecentScreening = screenings[0] || null;
+
+    let statusTitle = 'Annual Screening Recommended';
+    let personalizedTip = '';
+    let isUpToDate = false;
+
+    if (mostRecentScreening) {
+      const testDate = new Date(mostRecentScreening.testDate);
+      const diffMs = new Date().getTime() - testDate.getTime();
+      const daysSinceTest = Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
+
+      if (daysSinceTest <= 365) {
+        isUpToDate = true;
+        statusTitle = 'Screening Up-to-Date';
+        personalizedTip = `🛡️ Confidential Screening Status: Last recorded ${mostRecentScreening.testType} on ${
+          testDate.toISOString().split('T')[0]
+        } (${mostRecentScreening.result || 'Logged'}). Routine annual STI & Pap cytology checkups support proactive reproductive wellness.`;
+      } else {
+        statusTitle = 'Annual Checkup Overdue';
+        personalizedTip = `⏰ Annual Checkup Overdue: It has been over 12 months (${daysSinceTest} days) since your last recorded ${mostRecentScreening.testType}. Schedule an annual wellness checkup with your OB-GYN or provider.`;
+      }
+    } else {
+      personalizedTip =
+        '🔒 Confidential Health Tracking: Log your Pap smear, HPV, or STI lab screening dates below to monitor routine annual preventive care.';
+    }
+
+    return {
+      hasScreenings: Boolean(mostRecentScreening),
+      isUpToDate,
+      statusTitle,
+      mostRecentType: mostRecentScreening?.testType || null,
+      mostRecentDate: mostRecentScreening?.testDate
+        ? new Date(mostRecentScreening.testDate).toISOString().split('T')[0]
+        : null,
+      mostRecentResult: mostRecentScreening?.result || null,
+      personalizedTip,
+    };
   }
 
   async logSexualHealth(userId: string, dto: LogSexualHealthDto) {
