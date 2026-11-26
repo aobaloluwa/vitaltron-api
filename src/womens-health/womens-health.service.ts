@@ -1522,12 +1522,14 @@ Following placental delivery, maternal serum levels of estrogen and progesterone
   }
 
   async createReminder(userId: string, dto: CreateReminderDto) {
+    const formattedTime = dto.reminderTime ? dto.reminderTime.trim().slice(0, 20) : '09:00 AM';
+
     const reminder = await this.prisma.womensHealthReminder.create({
       data: {
         userId,
-        title: dto.title,
-        category: dto.category,
-        reminderTime: dto.reminderTime,
+        title: dto.title.slice(0, 200),
+        category: dto.category.slice(0, 50),
+        reminderTime: formattedTime,
         frequency: dto.frequency || 'DAILY',
         isEnabled: dto.isEnabled !== undefined ? dto.isEnabled : true,
         notes: dto.notes,
@@ -1538,7 +1540,7 @@ Following placental delivery, maternal serum levels of estrogen and progesterone
       await this.notificationsService.createNotification(
         userId,
         `🔔 Reminder Set: ${dto.title}`,
-        `Your ${dto.category.toLowerCase().replace('_', ' ')} reminder is scheduled for ${dto.reminderTime} (${dto.frequency || 'DAILY'}).`,
+        `Your ${dto.category.toLowerCase().replace('_', ' ')} reminder is scheduled for ${formattedTime} (${dto.frequency || 'DAILY'}).`,
         'REMINDER',
       );
     } catch (err) {
