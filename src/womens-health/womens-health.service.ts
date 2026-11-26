@@ -479,11 +479,65 @@ export class WomensHealthService {
     }
 
     const metrics = this.pregnancyCalculator.calculatePregnancyMetrics(profile.lmpDate, profile.confirmedDueDate);
+    const pregnancyInsights = this.generatePregnancyInsights(metrics.gestationalAgeWeeks, metrics.currentTrimester);
 
     return {
       profile,
       metrics,
+      pregnancyInsights,
     };
+  }
+
+  private generatePregnancyInsights(weeks: number, trimester: number) {
+    if (trimester === 1) {
+      return {
+        gestationalWeek: weeks,
+        currentTrimester: 1,
+        trimesterName: 'First Trimester',
+        keyCareAdvice:
+          'First Trimester Focus: Folic acid supplementation (400–800 mcg/day) is vital for early neural tube formation. Eat small, frequent meals to soothe morning nausea and stay well hydrated.',
+        recommendedActions: [
+          'Schedule initial prenatal consultation & dating ultrasound',
+          'Take daily prenatal vitamins with Folic Acid & Iron',
+          'Avoid raw seafood, unpasteurized dairy, and alcohol',
+        ],
+        safetyFlags: [
+          'Contact your OB-GYN immediately if you experience heavy vaginal bleeding or severe one-sided abdominal pain.',
+        ],
+      };
+    } else if (trimester === 2) {
+      return {
+        gestationalWeek: weeks,
+        currentTrimester: 2,
+        trimesterName: 'Second Trimester',
+        keyCareAdvice:
+          'Second Trimester Focus: Energy levels typically rebound! Start noting baby flutters (quickening) between weeks 18–22 and prepare for your mid-pregnancy anatomy scan.',
+        recommendedActions: [
+          'Schedule Mid-Pregnancy Anatomy Scan (Weeks 18–22)',
+          'Practice gentle pelvic floor (Kegel) and prenatal stretching',
+          'Sleep on your side with a pillow between your knees for joint support',
+        ],
+        safetyFlags: [
+          'Report severe persistent headaches, blurred vision, or sudden hand/facial swelling to your healthcare provider.',
+        ],
+      };
+    } else {
+      return {
+        gestationalWeek: weeks,
+        currentTrimester: 3,
+        trimesterName: 'Third Trimester',
+        keyCareAdvice:
+          "Third Trimester Focus: Rapid fetal growth & lung maturation! Perform daily Kick Counts during baby's active window (aim for 10 movements in 2 hours) and track Braxton Hicks vs real labor contractions.",
+        recommendedActions: [
+          'Perform daily fetal kick counts during peak activity times',
+          'Pack hospital bag, prepare car seat & outline birth preferences',
+          'Practice 5-1-1 contraction timing rule (5 mins apart, 1 min long, for 1 hour)',
+        ],
+        safetyFlags: [
+          'Alert your labor ward immediately if you notice significantly reduced fetal movement, fluid leakage, or regular painful contractions.',
+        ],
+      };
+    }
   }
 
   async createPregnancyProfile(userId: string, dto: CreatePregnancyProfileDto) {
