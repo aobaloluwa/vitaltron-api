@@ -959,9 +959,77 @@ export class WomensHealthService {
   // ==========================================
 
   async getContraception(userId: string) {
-    return this.prisma.contraceptionProfile.findUnique({
+    const profile = await this.prisma.contraceptionProfile.findUnique({
       where: { patientId: userId },
     });
+
+    const contraceptionInsights = this.generateContraceptionInsights(profile);
+
+    return {
+      profile,
+      contraceptionInsights,
+    };
+  }
+
+  private generateContraceptionInsights(profile: any) {
+    if (!profile) {
+      return {
+        hasProfile: false,
+        methodTitle: 'No Active Method',
+        daysUntilReplacement: null,
+        personalizedTip:
+          'Log your current birth control method (Pill, IUD, Implant, Patch, Ring, or Condom) above to receive schedule and safety guidance.',
+      };
+    }
+
+    const type = profile.type || 'PILL';
+    const brand = profile.brandName || type;
+    const startDate = profile.startDate ? new Date(profile.startDate) : new Date();
+    const replacementDate = profile.replacementDate
+      ? new Date(profile.replacementDate)
+      : null;
+
+    let daysUntilReplacement: number | null = null;
+    if (replacementDate) {
+      const diffMs = replacementDate.getTime() - new Date().getTime();
+      daysUntilReplacement = Math.max(0, Math.ceil(diffMs / (1000 * 60 * 60 * 24)));
+    }
+
+    let personalizedTip = '';
+    const methodTitle = `${brand} (${type.replace('_', ' ')})`;
+
+    if (type === 'PILL') {
+      personalizedTip = `💊 Daily Oral Contraceptive (${brand}): Take 1 pill at the same time every day. If 1 pill is missed (>24 hrs late), take the missed pill immediately and continue daily doses. Use backup protection if >2 pills are missed.`;
+    } else if (type === 'IUD_HORMONAL' || type === 'IUD_COPPER' || type === 'IMPLANT') {
+      const countdownText =
+        daysUntilReplacement !== null
+          ? `Replacement due in ${daysUntilReplacement} days.`
+          : 'No replacement date set.';
+      personalizedTip = `🛡️ Long-Acting Reversible Contraception (${brand}): Provides over 99% effective ongoing protection without daily effort. ${countdownText}`;
+    } else if (type === 'PATCH' || type === 'RING') {
+      personalizedTip = `🔄 Weekly/Monthly Method (${brand}): Change your ${
+        type === 'PATCH' ? 'patch weekly' : 'vaginal ring every 3 weeks'
+      }. Set recurring mobile reminders to ensure steady hormone absorption.`;
+    } else if (type === 'INJECTION') {
+      const countdownText =
+        daysUntilReplacement !== null
+          ? `Next injection due in ${daysUntilReplacement} days.`
+          : 'Schedule next shot every 12–13 weeks.';
+      personalizedTip = `💉 Depot Injection (${brand}): ${countdownText} Timely repeat injections maintain full contraceptive efficacy.`;
+    } else {
+      personalizedTip = `🛡️ Barrier Contraceptive (${brand}): Barrier methods protect against both unintended pregnancy and sexually transmitted infections (STIs).`;
+    }
+
+    return {
+      hasProfile: true,
+      methodTitle,
+      type,
+      brandName: brand,
+      startDate: startDate.toISOString().split('T')[0],
+      replacementDate: replacementDate ? replacementDate.toISOString().split('T')[0] : null,
+      daysUntilReplacement,
+      personalizedTip,
+    };
   }
 
   async updateContraception(userId: string, dto: CreateContraceptionDto) {
