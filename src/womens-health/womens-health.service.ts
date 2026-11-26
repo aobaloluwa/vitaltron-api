@@ -150,6 +150,11 @@ export class WomensHealthService {
       profile.activeMode,
     );
 
+    const fertilityInsights = this.generateFertilityInsights(
+      todayLog,
+      cycleMetrics,
+    );
+
     // Reminders
     const reminders = await this.prisma.womensHealthReminder.findMany({
       where: { userId, isEnabled: true },
@@ -168,8 +173,67 @@ export class WomensHealthService {
       menopauseSummary: menopauseProfile,
       todayLog,
       symptomInsights,
+      fertilityInsights,
       recentLogs,
       upcomingReminders: reminders,
+    };
+  }
+
+  private generateFertilityInsights(todayLog: any | null, cycleMetrics: any) {
+    const todayLogged = Boolean(
+      todayLog &&
+        (todayLog.bbt || todayLog.cervicalMucus || todayLog.ovulationTestResult),
+    );
+    const todayBbt = todayLog?.bbt || null;
+    const todayMucus = todayLog?.cervicalMucus || null;
+    const todayLhTest = todayLog?.ovulationTestResult || null;
+
+    let fertilityStatus: 'PEAK' | 'HIGH' | 'MODERATE' | 'LOW' | 'POST_OVULATION' =
+      'MODERATE';
+    let statusDisplayName = 'Moderate Fertility';
+    let personalizedTip = '';
+
+    const phase = cycleMetrics?.currentPhase || 'FOLLICULAR';
+
+    if (
+      todayLhTest === 'POSITIVE' ||
+      todayLhTest === 'PEAK' ||
+      todayMucus === 'EGG_WHITE'
+    ) {
+      fertilityStatus = 'PEAK';
+      statusDisplayName = 'Peak Fertility Window';
+      personalizedTip =
+        '🔥 Peak Fertility Detected! Your Egg-White cervical mucus or Positive LH Surge indicates ovulation is expected within 12–36 hours. Conception probability is at its highest.';
+    } else if (todayMucus === 'WATERY' || phase === 'OVULATORY') {
+      fertilityStatus = 'HIGH';
+      statusDisplayName = 'High Fertility';
+      personalizedTip =
+        '⚡ High Fertility Window! Watery cervical mucus during your ovulatory phase supports sperm motility. Conception odds are high.';
+    } else if (todayBbt && todayBbt >= 36.7 && phase === 'LUTAL') {
+      fertilityStatus = 'POST_OVULATION';
+      statusDisplayName = 'Post-Ovulation (Progesterone Phase)';
+      personalizedTip = `🌡️ Thermal Shift Observed (${todayBbt}°C)! Elevated BBT during your Luteal phase suggests ovulation has occurred and progesterone is active.`;
+    } else if (phase === 'MENSTRUAL') {
+      fertilityStatus = 'LOW';
+      statusDisplayName = 'Low Fertility (Menstrual Phase)';
+      personalizedTip =
+        '🩸 Menstrual Phase: Conception probability is low. Continue tracking morning BBT before rising for baseline accuracy.';
+    } else {
+      fertilityStatus = 'MODERATE';
+      statusDisplayName = 'Approaching Fertile Window';
+      personalizedTip = todayLogged
+        ? `Observations logged today: ${todayBbt ? `BBT ${todayBbt}°C` : ''} ${todayMucus ? `Mucus: ${todayMucus}` : ''}. Keep tracking daily to confirm your LH surge.`
+        : '📊 Log your morning Basal Body Temperature (°C) and cervical mucus above to unlock your personalized real-time fertility analysis.';
+    }
+
+    return {
+      todayLogged,
+      todayBbt,
+      todayMucus,
+      todayLhTest,
+      fertilityStatus,
+      statusDisplayName,
+      personalizedTip,
     };
   }
 
